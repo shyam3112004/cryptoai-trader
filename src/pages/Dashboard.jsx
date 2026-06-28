@@ -2529,47 +2529,79 @@ export default function Dashboard() {
 
           {/* TAB 2: ALGORITHMS HUD */}
           {currentTab === 'algorithms' && (
-            <div className="space-y-6">
-              <div className="premium-card rounded-xl p-6">
-                <div className="flex justify-between items-center mb-6">
+            <div className="space-y-4">
+              {/* Top Summary Card */}
+              <div className="premium-card rounded-xl p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                   <div>
-                    <h2 className="text-xl font-headline font-bold text-white">9-Algo Consensus Engine</h2>
-                    <p className="text-xs text-slate-400 mt-1">Weighted neural networks aggregating real-time parameters.</p>
+                    <h2 className="text-lg md:text-xl font-headline font-bold text-white flex items-center gap-2">
+                      <span className="material-symbols-outlined text-cyan-400 text-xl md:text-2xl">memory</span>
+                      <span>9-Algo Consensus Engine</span>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Weighted neural networks aggregating real-time parameters.</p>
                   </div>
                   <button
                     onClick={startRetraining}
                     disabled={isRetraining}
-                    className="px-6 py-2.5 rounded-xl bg-cyan-400 text-black font-bold text-xs uppercase tracking-widest hover:bg-cyan-300 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-cyan-400 text-black font-bold text-xs uppercase tracking-wider hover:bg-cyan-300 transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center space-x-1.5"
                   >
-                    {isRetraining ? `Retraining (${retrainProgress}%)` : 'Retrain Ensemble'}
+                    <span className="material-symbols-outlined text-sm">{isRetraining ? 'sync' : 'auto_mode'}</span>
+                    <span>{isRetraining ? `Retraining (${retrainProgress}%)` : 'Retrain Ensemble'}</span>
                   </button>
                 </div>
 
                 {isRetraining && (
-                  <div className="mb-6 h-2 w-full bg-[#111827] rounded-full overflow-hidden">
+                  <div className="mb-4 h-2 w-full bg-[#111827] rounded-full overflow-hidden">
                     <div className="h-full bg-cyan-400 transition-all duration-200" style={{ width: `${retrainProgress}%` }}></div>
                   </div>
                 )}
 
-                <div className="space-y-4">
+                {/* Live Consensus Overview Stats */}
+                <div className="grid grid-cols-3 gap-2 md:gap-4 my-3 p-3 rounded-xl border border-[#1E2D4A] bg-[#080C18]/60">
+                  <div className="text-center">
+                    <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Consensus</p>
+                    <p className="text-xs md:text-sm font-bold text-[#00E676] font-mono-data mt-0.5">BUY / LONG</p>
+                  </div>
+                  <div className="text-center border-x border-[#1E2D4A] px-1">
+                    <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Confidence</p>
+                    <p className="text-xs md:text-sm font-bold text-white font-mono-data mt-0.5">87.4%</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Active Models</p>
+                    <p className="text-xs md:text-sm font-bold text-cyan-400 font-mono-data mt-0.5">9 / 9</p>
+                  </div>
+                </div>
+
+                {/* 9-Algo Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                   {algoMetrics.map((algo, i) => (
-                    <div key={i} className="p-4 rounded-xl border border-[#1E2D4A] bg-[#0F1629] flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <span className="material-symbols-outlined text-cyan-400">psychology</span>
-                        <div>
-                          <p className="text-sm font-bold text-white">{algo.name}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">VOTING WEIGHT: {algo.weight}</p>
+                    <div key={i} className="p-3.5 rounded-xl border border-[#1E2D4A] bg-[#0F1629] hover:border-cyan-500/40 transition-all flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="material-symbols-outlined text-cyan-400 text-lg">psychology</span>
+                          <p className="text-xs font-bold text-white truncate max-w-[130px]">{algo.name}</p>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-mono-data text-cyan-400">ACCURACY: {algo.val}%</p>
-                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1 border ${
+                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded border ${
                           algo.status === 'ACTIVE' 
                             ? 'bg-[#00E676]/10 border-[#00E676]/30 text-[#00E676]' 
                             : 'bg-amber-500/10 border-amber-500/30 text-amber-500'
                         }`}>
                           {algo.status}
                         </span>
+                      </div>
+
+                      <div className="space-y-1 pt-1 border-t border-[#1E2D4A]/40">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-slate-400">Voting Weight:</span>
+                          <span className="font-mono-data text-white font-bold">{algo.weight}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-slate-400">Model Accuracy:</span>
+                          <span className="font-mono-data text-cyan-400 font-bold">{algo.val}%</span>
+                        </div>
+                        <div className="h-1 w-full bg-[#111827] rounded-full overflow-hidden mt-1">
+                          <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width: `${algo.val}%` }}></div>
+                        </div>
                       </div>
                     </div>
                   ))}
