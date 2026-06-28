@@ -131,37 +131,43 @@ export default function Login() {
         </section>
 
         {/* Right Panel: Login Form */}
-        <section className="w-full md:w-1/2 lg:w-2/5 flex flex-col justify-center items-center p-[24px] lg:p-[64px] bg-surface relative min-h-screen">
+        <section className="w-full md:w-1/2 lg:w-2/5 flex flex-col justify-center items-center p-4 md:p-8 lg:p-12 bg-surface relative min-h-screen">
           {/* Mobile Branding (Hidden on Desktop) */}
-          <div className="md:hidden flex flex-col items-center mb-[40px]">
-            <span className="text-[32px] font-headline logo-gradient mb-[8px]">◈</span>
-            <h2 className="text-[24px] font-headline font-bold text-on-surface">CryptoAI Trader</h2>
+          <div className="md:hidden flex flex-col items-center mb-6">
+            <span className="text-3xl font-headline logo-gradient mb-1">◈</span>
+            <h2 className="text-xl font-headline font-bold text-on-surface">CryptoAI Trader</h2>
           </div>
 
           <div className="w-full max-w-md">
-            <div className="mb-[40px]">
-              <h2 className="text-[32px] font-headline font-bold text-on-surface mb-[4px] animate-fade-up" style={{ animationDelay: '150ms', opacity: isMounted ? 1 : 0 }}>Welcome back</h2>
-              <p className="text-[14px] font-body text-on-surface-variant animate-fade-in" style={{ animationDelay: '250ms', opacity: isMounted ? 0.7 : 0 }}>Please enter your credentials to access the AI Terminal.</p>
+            <div className="mb-6 flex justify-between items-center bg-surface-container-lowest/50 p-4 rounded-xl border border-outline-variant/30">
+              <div>
+                <h2 className="text-xl md:text-2xl font-headline font-bold text-on-surface mb-0.5 animate-fade-up" style={{ animationDelay: '150ms', opacity: isMounted ? 1 : 0 }}>Welcome back</h2>
+                <p className="text-xs font-body text-on-surface-variant animate-fade-in" style={{ animationDelay: '250ms', opacity: isMounted ? 0.7 : 0 }}>Access your AI Terminal.</p>
+              </div>
+              <Link className="text-xs font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center space-x-1" to="/auth/signup">
+                <span>REGISTER</span>
+                <span className="material-symbols-outlined text-xs">person_add</span>
+              </Link>
             </div>
 
             {/* Error Banner */}
             {(localError || error) && !lockout && (
-              <div className="bg-error-container text-on-error-container p-[16px] rounded-xl mb-[24px] overflow-hidden transition-all duration-200">
-                <div className="flex items-center gap-[8px]">
-                  <span className="material-symbols-outlined">error</span>
-                  <p className="text-[14px] font-medium">{localError || error}</p>
+              <div className="bg-error-container text-on-error-container p-3 rounded-xl mb-4 overflow-hidden transition-all duration-200">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">error</span>
+                  <p className="text-xs font-medium">{localError || error}</p>
                 </div>
               </div>
             )}
 
             {/* Login Form */}
-            <form className="space-y-[16px]" onSubmit={handleLoginSubmit}>
+            <form className="space-y-4" onSubmit={handleLoginSubmit}>
               {/* Email Address */}
-              <div className="space-y-[8px] animate-fade-up" style={{ animationDelay: '350ms', opacity: isMounted ? 1 : 0 }}>
-                <label className="text-[12px] font-semibold text-on-surface-variant uppercase tracking-wider" htmlFor="email">Email Address</label>
+              <div className="space-y-1.5 animate-fade-up" style={{ animationDelay: '350ms', opacity: isMounted ? 1 : 0 }}>
+                <label className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider" htmlFor="email">Email Address</label>
                 <div className="relative">
                   <input
-                    className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-xl px-[16px] py-3 text-[14px] transition-all duration-300 outline-none focus:border-primary-container focus:ring-3 focus:ring-primary-container/15"
+                    className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-xl px-4 py-2.5 text-xs md:text-sm transition-all duration-300 outline-none focus:border-primary-container focus:ring-3 focus:ring-primary-container/15"
                     id="email"
                     placeholder="name@company.com"
                     required
@@ -173,14 +179,14 @@ export default function Login() {
               </div>
 
               {/* Password */}
-              <div className={`space-y-[8px] animate-fade-up ${shake ? 'shake-error' : ''}`} style={{ animationDelay: '430ms', opacity: isMounted ? 1 : 0 }}>
+              <div className={`space-y-1.5 animate-fade-up ${shake ? 'shake-error' : ''}`} style={{ animationDelay: '430ms', opacity: isMounted ? 1 : 0 }}>
                 <div className="flex justify-between items-center">
-                  <label className="text-[12px] font-semibold text-on-surface-variant uppercase tracking-wider" htmlFor="password">Password</label>
-                  <a className="text-[12px] font-semibold text-primary-container hover-underline transition-colors" href="#forgot">Forgot password?</a>
+                  <label className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider" htmlFor="password">Password</label>
+                  <a className="text-[11px] font-semibold text-primary-container hover-underline transition-colors" href="#forgot">Forgot password?</a>
                 </div>
                 <div className="relative group">
                   <input
-                    className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-xl px-[16px] py-3 text-[14px] transition-all duration-300 pr-12 outline-none focus:border-primary-container focus:ring-3 focus:ring-primary-container/15"
+                    className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-xl px-4 py-2.5 text-xs md:text-sm transition-all duration-300 pr-12 outline-none focus:border-primary-container focus:ring-3 focus:ring-primary-container/15"
                     id="password"
                     placeholder="••••••••"
                     required
@@ -193,7 +199,7 @@ export default function Login() {
                     onClick={() => setShowPassword(prev => !prev)}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-[20px] transition-all duration-300">
+                    <span className="material-symbols-outlined text-lg transition-all duration-300">
                       {showPassword ? 'visibility_off' : 'visibility'}
                     </span>
                   </button>
@@ -201,7 +207,7 @@ export default function Login() {
               </div>
 
               {/* Remember Me */}
-              <div className="flex items-center space-x-[8px] pt-[4px] animate-fade-in" style={{ animationDelay: '510ms', opacity: isMounted ? 0.7 : 0 }}>
+              <div className="flex items-center space-x-2 pt-1 animate-fade-in" style={{ animationDelay: '510ms', opacity: isMounted ? 0.7 : 0 }}>
                 <div className="relative flex items-center custom-checkbox-container">
                   <input
                     className="peer opacity-0 absolute h-4 w-4 cursor-pointer"
@@ -215,13 +221,13 @@ export default function Login() {
                     <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"></path>
                   </svg>
                 </div>
-                <label className="text-[14px] font-body text-on-surface-variant cursor-pointer select-none" htmlFor="remember">Remember me for 30 days</label>
+                <label className="text-xs font-body text-on-surface-variant cursor-pointer select-none" htmlFor="remember">Remember me for 30 days</label>
               </div>
 
               {/* Submit Button */}
-              <div className="pt-[16px] animate-fade-up" style={{ animationDelay: '590ms', opacity: isMounted ? 1 : 0 }}>
+              <div className="pt-2 animate-fade-up" style={{ animationDelay: '590ms', opacity: isMounted ? 1 : 0 }}>
                 <button
-                  className={`w-full font-bold py-4 rounded-xl flex items-center justify-center space-x-[8px] transition-all active:scale-[0.98] cursor-pointer ${
+                  className={`w-full font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-all active:scale-[0.98] cursor-pointer ${
                     success 
                       ? 'bg-[#4ade80] text-black shadow-lg shadow-green-500/20' 
                       : 'shimmer-btn-flow text-on-primary-container'
@@ -231,24 +237,24 @@ export default function Login() {
                   type="submit"
                 >
                   {!success && !isLoading && (
-                    <div className="flex items-center space-x-[8px]">
-                      <span className="text-[12px] font-semibold uppercase tracking-widest">SIGN IN</span>
-                      <span className="material-symbols-outlined">arrow_forward</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-semibold uppercase tracking-widest">SIGN IN</span>
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
                     </div>
                   )}
                   {isLoading && (
-                    <div className="flex items-center space-x-[8px]">
-                      <svg className="animate-spin h-5 w-5 text-on-primary-container" fill="none" viewBox="0 0 24 24">
+                    <div className="flex items-center space-x-2">
+                      <svg className="animate-spin h-4 w-4 text-on-primary-container" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
                       </svg>
-                      <span className="text-[12px] font-semibold uppercase tracking-widest">Signing in...</span>
+                      <span className="text-xs font-semibold uppercase tracking-widest">Signing in...</span>
                     </div>
                   )}
                   {success && (
-                    <div className="flex items-center space-x-[8px]">
-                      <span className="material-symbols-outlined scale-125">check_circle</span>
-                      <span className="text-[12px] font-semibold uppercase tracking-widest">Authorized</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="material-symbols-outlined scale-110">check_circle</span>
+                      <span className="text-xs font-semibold uppercase tracking-widest">Authorized</span>
                     </div>
                   )}
                 </button>
@@ -256,30 +262,30 @@ export default function Login() {
             </form>
 
             {/* Divider */}
-            <div className="relative my-[40px] animate-fade-in flex items-center justify-center" style={{ animationDelay: '650ms', opacity: isMounted ? 0.7 : 0 }}>
+            <div className="relative my-4 animate-fade-in flex items-center justify-center" style={{ animationDelay: '650ms', opacity: isMounted ? 0.7 : 0 }}>
               <div className="absolute w-full flex items-center justify-center">
                 <div className="h-[1px] bg-outline-variant w-1/2 absolute left-0 origin-left"></div>
                 <div className="h-[1px] bg-outline-variant w-1/2 absolute right-0 origin-right"></div>
               </div>
-              <span className="relative z-10 bg-[#0e1417] px-[16px] text-[12px] font-semibold text-outline uppercase tracking-widest">or</span>
+              <span className="relative z-10 bg-[#0e1417] px-3 text-[10px] font-semibold text-outline uppercase tracking-widest">or</span>
             </div>
 
             {/* Google OAuth */}
-            <button className="google-btn w-full glass-panel text-on-surface py-3.5 rounded-xl flex items-center justify-center space-x-[16px] hover:bg-[#162035] hover:border-[#00C8FF] transition-all active:scale-[0.98] animate-fade-in cursor-pointer" style={{ animationDelay: '650ms', opacity: isMounted ? 1 : 0 }}>
-              <svg className="w-5 h-5 transition-transform duration-500" viewBox="0 0 24 24">
+            <button className="google-btn w-full glass-panel text-on-surface py-2.5 rounded-xl flex items-center justify-center space-x-3 hover:bg-[#162035] hover:border-[#00C8FF] transition-all active:scale-[0.98] animate-fade-in cursor-pointer" style={{ animationDelay: '650ms', opacity: isMounted ? 1 : 0 }}>
+              <svg className="w-4 h-4 transition-transform duration-500" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
               </svg>
-              <span className="text-[14px] font-body">Continue with Google</span>
+              <span className="text-xs font-body">Continue with Google</span>
             </button>
 
             {/* Footer Links */}
-            <div className="mt-[40px] text-center animate-fade-in" style={{ animationDelay: '700ms', opacity: isMounted ? 0.7 : 0 }}>
-              <p className="text-[14px] font-body text-on-surface-variant">
+            <div className="mt-6 text-center animate-fade-in" style={{ animationDelay: '700ms', opacity: isMounted ? 0.7 : 0 }}>
+              <p className="text-xs font-body text-on-surface-variant">
                 Don't have an account? 
-                <Link className="text-primary-container font-semibold hover-underline ml-1" to="/auth/signup">Create one</Link>
+                <Link className="text-primary-container font-semibold hover-underline ml-1" to="/auth/signup">Create one now</Link>
               </p>
             </div>
           </div>

@@ -1719,6 +1719,10 @@ export default function Dashboard() {
                 REAL
               </button>
             </div>
+            <div className="flex items-center px-2.5 py-1 bg-[#111827] border border-[#1E2D4A] rounded-full text-[11px] md:text-xs font-mono-data text-white">
+              <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold">BAL:</span>
+              <span className="font-bold text-cyan-400">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
           </div>
           
           <div className="flex items-center space-x-1 md:space-x-6">
