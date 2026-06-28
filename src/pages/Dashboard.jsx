@@ -1665,7 +1665,7 @@ export default function Dashboard() {
       {/* Main Content Pane */}
       <main className="md:ml-64 flex flex-col h-screen overflow-hidden">
         {/* Top Header Bar */}
-        <header className={`glass-nav h-16 px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
+        <header className={`glass-nav h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
           <div className="flex items-center space-x-8">
             <h1 className="text-xl font-headline font-bold flex items-center">
               <span className="text-cyan-400 mr-2 text-2xl">◈</span>
@@ -2118,7 +2118,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Pages Switcher */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 pb-[100px]">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-[120px]">
           
           {/* TAB 1: MAIN DASHBOARD */}
           {currentTab === 'dashboard' && (
@@ -2957,6 +2957,49 @@ export default function Dashboard() {
             </button>
           </div>
         </footer>
+
+        {/* Mobile Bottom Navigation Bar */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0F1D]/95 backdrop-blur-md border-t border-[#1E2D4A] px-2 py-2 flex justify-around items-center">
+          <button
+            onClick={() => setCurrentTab('dashboard')}
+            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'dashboard' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">dashboard</span>
+            <span className="text-[10px] font-bold">Terminal</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('algorithms')}
+            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'algorithms' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">memory</span>
+            <span className="text-[10px] font-bold">Algos</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('history')}
+            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'history' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">list_alt</span>
+            <span className="text-[10px] font-bold">History</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('signals')}
+            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'signals' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">insights</span>
+            <span className="text-[10px] font-bold">Signals</span>
+          </button>
+        </nav>
       </main>
     </div>
   )
