@@ -1,0 +1,29 @@
+import os
+import secrets
+from dotenv import load_dotenv
+
+# Load local .env file if it exists
+load_dotenv()
+
+class Settings:
+    PROJECT_NAME: str = "CryptoAI Trader API"
+    PROJECT_VERSION: str = "3.0"
+    
+    # Database config
+    # Default to zero-config SQLite to avoid Postgres connection errors if no server is running
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", 
+        "sqlite+aiosqlite:///./cryptoai.db"
+    )
+    
+    # JWT security config
+    SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_hex(32))
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+
+    # Twilio configurations
+    TWILIO_ACCOUNT_SID: str | None = os.getenv("TWILIO_ACCOUNT_SID")
+    TWILIO_AUTH_TOKEN: str | None = os.getenv("TWILIO_AUTH_TOKEN")
+    TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "whatsapp:+14155238886")
+
+settings = Settings()
