@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+const getApiBase = () => {
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return window.location.origin
+  }
+  return 'http://localhost:8000'
+}
+
 export const useAuthStore = create()(
   persist(
     (set, get) => ({
@@ -14,7 +21,7 @@ export const useAuthStore = create()(
       register: async (data) => {
         set({ isLoading: true, error: null })
         try {
-          const res = await fetch('http://localhost:8000/api/v1/auth/register', {
+          const res = await fetch(`${getApiBase()}/api/v1/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -61,7 +68,7 @@ export const useAuthStore = create()(
             throw new Error(`Account locked. Retry in ${minutesLeft} minute(s).`)
           }
 
-          const res = await fetch('http://localhost:8000/api/v1/auth/login', {
+          const res = await fetch(`${getApiBase()}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

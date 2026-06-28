@@ -718,7 +718,9 @@ export default function Dashboard() {
 
     function connectWebSocket() {
       console.log('Connecting to live price websocket for: ' + selectedSymbol)
-      ws = new WebSocket('ws://localhost:8000/api/v1/signals/ws/live')
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:8000' : window.location.host
+      ws = new WebSocket(`${wsProtocol}//${wsHost}/api/v1/signals/ws/live`)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -2063,7 +2065,8 @@ export default function Dashboard() {
                         localStorage.setItem('brokerApiKey', brokerApiKey)
                         localStorage.setItem('brokerApiSecret', brokerApiSecret)
                         try {
-                          await fetch('http://localhost:8000/api/v1/auth/settings', {
+                          const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+                          await fetch(`${apiBase}/api/v1/auth/settings`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
