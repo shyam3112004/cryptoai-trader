@@ -220,6 +220,7 @@ export default function Dashboard() {
   // Refs for click outside, WebSockets, and Canvas hover tracking
   const notificationsRef = useRef(null)
   const settingsRef = useRef(null)
+  const mobileSettingsRef = useRef(null)
   const symbolDropdownRef = useRef(null)
   const wsRef = useRef(null)
   const mouseRef = useRef(null)
@@ -401,7 +402,7 @@ export default function Dashboard() {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setIsNotificationsOpen(false)
       }
-      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target) && (!mobileSettingsRef.current || !mobileSettingsRef.current.contains(event.target))) {
         setIsSettingsOpen(false)
       }
       if (symbolDropdownRef.current && !symbolDropdownRef.current.contains(event.target)) {
@@ -3271,7 +3272,7 @@ export default function Dashboard() {
 
         {/* Mobile Settings Modal Drawer (Top-Level Portal to avoid header clipping) */}
         {isSettingsOpen && (
-          <div className="fixed inset-0 z-[10000] bg-[#0A0F1D] md:hidden overflow-y-auto p-4 flex flex-col justify-between pb-24">
+          <div ref={mobileSettingsRef} className="fixed inset-0 z-[10000] bg-[#0A0F1D] md:hidden overflow-y-auto p-4 flex flex-col justify-between pb-24">
             <div>
               <div className="flex justify-between items-center mb-4 border-b border-[#1E2D4A] pb-3 sticky top-0 bg-[#0A0F1D] z-10 py-2">
                 <div>
