@@ -67,8 +67,12 @@ export default function Dashboard() {
   const [balance, setBalance] = useState(realizedBalance)
   const [todayPnl, setTodayPnl] = useState(realizedTodayPnl)
   
-  const [tradeInvestment, setTradeInvestment] = useState(() => {
-    const saved = localStorage.getItem('tradeInvestment')
+  const [tradeInvestmentUSD, setTradeInvestmentUSD] = useState(() => {
+    const saved = localStorage.getItem('tradeInvestmentUSD')
+    return saved ? parseFloat(saved) : 100.00
+  })
+  const [tradeInvestmentINR, setTradeInvestmentINR] = useState(() => {
+    const saved = localStorage.getItem('tradeInvestmentINR')
     return saved ? parseFloat(saved) : 1000.00
   })
   const [autoTradeMode, setAutoTradeMode] = useState(() => {
@@ -125,6 +129,16 @@ export default function Dashboard() {
     const val = localStorage.getItem('tradePacing')
     return val !== null ? val : 'rapid'
   })
+
+  const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
+  const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
+  const setTradeInvestment = (val) => {
+    if (isCryptoActive) {
+      setTradeInvestmentUSD(val)
+    } else {
+      setTradeInvestmentINR(val)
+    }
+  }
 
   const realizedBalanceRef = useRef(realizedBalance)
   const realizedTodayPnlRef = useRef(realizedTodayPnl)
@@ -214,9 +228,17 @@ export default function Dashboard() {
   }, [realizedTodayPnl])
 
   useEffect(() => {
-    localStorage.setItem('tradeInvestment', tradeInvestment)
-    tradeInvestmentRef.current = tradeInvestment
-  }, [tradeInvestment])
+    localStorage.setItem('tradeInvestmentUSD', tradeInvestmentUSD)
+  }, [tradeInvestmentUSD])
+
+  useEffect(() => {
+    localStorage.setItem('tradeInvestmentINR', tradeInvestmentINR)
+  }, [tradeInvestmentINR])
+
+  useEffect(() => {
+    const isCrypto = getCurrencySymbol(selectedSymbol) === '$'
+    tradeInvestmentRef.current = isCrypto ? tradeInvestmentUSD : tradeInvestmentINR
+  }, [selectedSymbol, tradeInvestmentUSD, tradeInvestmentINR])
 
   useEffect(() => {
     localStorage.setItem('autoTradeMode', autoTradeMode)
