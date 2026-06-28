@@ -2167,6 +2167,102 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Main Chart Section */}
+              <section className="premium-card rounded-xl overflow-hidden h-[380px] md:h-[540px] flex flex-col my-4">
+                <div className="h-14 flex items-center justify-between px-4 md:px-6 bg-[#0A0F1D] border-b border-[#1E2D4A] relative select-none">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-[10px] font-bold text-black font-headline">
+                        {selectedSymbol.includes('BTC') ? '₿' : selectedSymbol.includes('ETH') ? 'Ξ' : selectedSymbol.includes('SOL') ? '◎' : 'S'}
+                      </div>
+                      <span className="text-sm font-bold text-white tracking-wide">{selectedSymbol}</span>
+                      {isMarketClosed ? (
+                        <span className="px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 text-[9px] font-bold border border-slate-500/30 hidden sm:inline-block">
+                          MARKET CLOSED (OFF-HOURS)
+                        </span>
+                      ) : (
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyStopped ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-[#00E676] shadow-[0_0_8px_#00E676]'}`}></div>
+                      )}
+                    </div>
+                    
+                    {/* Live OHLC hover indicators */}
+                    {hoveredCandleData && (
+                      <div className="flex items-center space-x-3 text-[11px] font-mono-data text-slate-400 pl-4 border-l border-[#1E2D4A] ml-4 hidden lg:flex">
+                        <span>O: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>H: <span className="text-white">{hoveredCandleData.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>L: <span className="text-white">{hoveredCandleData.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>C: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 md:space-x-4 relative h-full">
+                    {/* Zoom Buttons */}
+                    <div className="flex items-center space-x-1 pr-2 md:pr-4 border-r border-[#1E2D4A] h-2/3">
+                      <button 
+                        onClick={() => setZoomLevel(prev => Math.max(15, prev - 5))}
+                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
+                        title="Zoom In (Fewer Candles)"
+                      >
+                        <span className="material-symbols-outlined text-base">zoom_in</span>
+                      </button>
+                      <button 
+                        onClick={() => setZoomLevel(prev => Math.min(80, prev + 5))}
+                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
+                        title="Zoom Out (More Candles)"
+                      >
+                        <span className="material-symbols-outlined text-base">zoom_out</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center space-x-1 bg-[#111827] p-1 rounded-lg border border-[#1E2D4A] h-9 overflow-x-auto max-w-[160px] md:max-w-none">
+                      {['1s', '1m', '5m', '15m', '1h', '1d'].map((tf) => (
+                        <button
+                          key={tf}
+                          onClick={() => setTimeframe(tf)}
+                          className={`px-2 py-0.5 md:px-2.5 md:py-1 text-[10px] font-bold rounded transition-all cursor-pointer uppercase ${
+                            timeframe === tf 
+                              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
+                              : 'text-slate-400 hover:text-white hover:bg-[#162035]'
+                          }`}
+                        >
+                          {tf}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 chart-container relative overflow-hidden bg-[#080C18]">
+                  <canvas 
+                    ref={canvasRef} 
+                    className="w-full h-full block cursor-crosshair"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onWheel={handleWheel}
+                  />
+                </div>
+
+                <div className="h-10 bg-[#0A0F1D] border-t border-[#1E2D4A] px-4 md:px-6 flex items-center justify-between text-[10px] font-mono-data text-slate-500 select-none">
+                  <div className="flex space-x-4 md:space-x-6">
+                    {hoveredCandleData ? (
+                      <>
+                        <span>O: <span className="text-white">${hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>C: <span className="text-white">${hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                      </>
+                    ) : (
+                      <span>Live Real-Time Trading Stream</span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyStopped ? 'bg-red-500' : 'bg-cyan-500'}`}></span>
+                    <span>{isEmergencyStopped ? 'OFFLINE' : 'LIVE'}</span>
+                  </div>
+                </div>
+              </section>
+
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* AI Signal Card */}
@@ -2326,104 +2422,6 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-
-              {/* Main Chart Section */}
-              <section className="premium-card rounded-xl overflow-hidden h-[540px] flex flex-col">
-                <div className="h-14 flex items-center justify-between px-6 bg-[#0A0F1D] border-b border-[#1E2D4A] relative select-none">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-[10px] font-bold text-black font-headline">
-                        {selectedSymbol.includes('BTC') ? '₿' : selectedSymbol.includes('ETH') ? 'Ξ' : selectedSymbol.includes('SOL') ? '◎' : 'S'}
-                      </div>
-                      <span className="text-sm font-bold text-white tracking-wide">{selectedSymbol}</span>
-                      {isMarketClosed ? (
-                        <span className="px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 text-[9px] font-bold border border-slate-500/30">
-                          MARKET CLOSED (OFF-HOURS)
-                        </span>
-                      ) : (
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyStopped ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-[#00E676] shadow-[0_0_8px_#00E676]'}`}></div>
-                      )}
-                    </div>
-                    
-                    {/* Live OHLC hover indicators */}
-                    {hoveredCandleData && (
-                      <div className="flex items-center space-x-3 text-[11px] font-mono-data text-slate-400 pl-4 border-l border-[#1E2D4A] ml-4 hidden lg:flex">
-                        <span>O: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>H: <span className="text-white">{hoveredCandleData.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>L: <span className="text-white">{hoveredCandleData.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>C: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center space-x-4 relative h-full">
-                    {/* Zoom Buttons */}
-                    <div className="flex items-center space-x-1 pr-4 border-r border-[#1E2D4A] h-2/3">
-                      <button 
-                        onClick={() => setZoomLevel(prev => Math.max(15, prev - 5))}
-                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
-                        title="Zoom In (Fewer Candles)"
-                      >
-                        <span className="material-symbols-outlined text-base">zoom_in</span>
-                      </button>
-                      <button 
-                        onClick={() => setZoomLevel(prev => Math.min(80, prev + 5))}
-                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
-                        title="Zoom Out (More Candles)"
-                      >
-                        <span className="material-symbols-outlined text-base">zoom_out</span>
-                      </button>
-                    </div>
-
-                    <div className="flex items-center space-x-1 bg-[#111827] p-1 rounded-lg border border-[#1E2D4A] h-9">
-                      {['1s', '1m', '2m', '3m', '5m', '10m', '15m', '1h', '4h', '1d'].map((tf) => (
-                        <button
-                          key={tf}
-                          onClick={() => setTimeframe(tf)}
-                          className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer uppercase ${
-                            timeframe === tf 
-                              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
-                              : 'text-slate-400 hover:text-white hover:bg-[#162035]'
-                          }`}
-                        >
-                          {tf}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 chart-container relative overflow-hidden bg-[#080C18]">
-                  <canvas 
-                    ref={canvasRef} 
-                    className="w-full h-full block cursor-crosshair"
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                    onMouseDown={handleMouseDown}
-                    onMouseUp={handleMouseUp}
-                    onWheel={handleWheel}
-                  />
-                </div>
-
-                <div className="h-10 bg-[#0A0F1D] border-t border-[#1E2D4A] px-6 flex items-center justify-between text-[10px] font-mono-data text-slate-500 select-none">
-                  <div className="flex space-x-6">
-                    {hoveredCandleData ? (
-                      <>
-                        <span>OPEN: <span className="text-white">${hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>CLOSE: <span className="text-white">${hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>HIGH: <span className="text-[#00E676]">${hoveredCandleData.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                        <span>LOW: <span className="text-red-400">${hoveredCandleData.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
-                      </>
-                    ) : (
-                      <span>Hover chart for OHLC metrics</span>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyStopped ? 'bg-red-500' : 'bg-cyan-500'}`}></span>
-                    <span>{isEmergencyStopped ? 'OFFLINE' : 'LATENCY: 12ms'}</span>
-                  </div>
-                </div>
-              </section>
 
               {/* Bottom Panels */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
