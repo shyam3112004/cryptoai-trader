@@ -2536,6 +2536,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </>
+          )}
+
           {/* TAB: DEDICATED GRAPH ANALYSIS */}
           {currentTab === 'chart' && (
             <div className="space-y-4">
