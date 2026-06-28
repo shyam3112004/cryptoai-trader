@@ -1796,9 +1796,9 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined">settings</span>
                 </button>
                 
-                {/* Popover Card */}
-                <div className={`fixed inset-0 w-full h-full md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-[420px] md:h-auto md:max-h-[85vh] overflow-y-auto border border-[#1E2D4A] bg-[#0A0F1D] p-4 md:p-6 shadow-2xl transition-all duration-200 z-[999] ${
-                  isSettingsOpen ? 'opacity-100 scale-100 pointer-events-auto block' : 'opacity-0 scale-95 pointer-events-none hidden md:block'
+                {/* Popover Card (Desktop) */}
+                <div className={`hidden md:block absolute right-0 top-full mt-2 w-[420px] max-h-[85vh] overflow-y-auto rounded-xl border border-[#1E2D4A] bg-[#0F1629] p-6 shadow-2xl transition-all duration-200 z-50 ${
+                  isSettingsOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
                 }`}>
                   <div className="flex justify-between items-center mb-4 border-b border-[#1E2D4A] pb-3">
                     <div>
@@ -3268,6 +3268,289 @@ export default function Dashboard() {
             <span className="text-[9px] font-bold">Signals</span>
           </button>
         </nav>
+
+        {/* Mobile Settings Modal Drawer (Top-Level Portal to avoid header clipping) */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-[10000] bg-[#0A0F1D] md:hidden overflow-y-auto p-4 flex flex-col justify-between pb-24">
+            <div>
+              <div className="flex justify-between items-center mb-4 border-b border-[#1E2D4A] pb-3 sticky top-0 bg-[#0A0F1D] z-10 py-2">
+                <div>
+                  <span className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <span className="material-symbols-outlined text-cyan-400">settings</span>
+                    Terminal Parameters
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Customize risk manager metrics & market targets.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-2 text-white bg-red-500/20 hover:bg-red-500/40 rounded-xl border border-red-500/40 cursor-pointer flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-lg font-bold">close</span>
+                </button>
+              </div>
+
+              <div className="space-y-5 text-xs">
+                {/* Max Open Positions */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Max Open Positions</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{maxOpenPositions}</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={maxOpenPositions}
+                    onChange={(e) => setMaxOpenPositions(parseInt(e.target.value))}
+                    className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-2 cursor-pointer"
+                  />
+                </div>
+
+                {/* Stop Loss Limit */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Stop Loss Limit</span>
+                    <span className="text-red-400 font-bold font-mono-data">{stopLossLimit}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0.5" 
+                    max="5.0" 
+                    step="0.1"
+                    value={stopLossLimit}
+                    onChange={(e) => setStopLossLimit(parseFloat(e.target.value))}
+                    className="w-full accent-red-400 bg-slate-800 rounded-lg appearance-none h-2 cursor-pointer"
+                  />
+                </div>
+
+                {/* Auto-Trade Pacing Speed */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Auto-Trade Pacing Speed</span>
+                    <span className="text-cyan-400 font-bold capitalize font-mono-data">{tradePacing}</span>
+                  </div>
+                  <select
+                    value={tradePacing}
+                    onChange={(e) => setTradePacing(e.target.value)}
+                    className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer font-bold"
+                  >
+                    <option value="scalping">Scalping (Aggressive - 1s stream)</option>
+                    <option value="balanced">Balanced (Standard - 3s stream)</option>
+                    <option value="conservative">Conservative (Safe - 5s stream)</option>
+                  </select>
+                </div>
+
+                {/* Desktop Notifications */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-slate-300 font-bold block">Trade Alert Notifications</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">Push alerts when orders trigger</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={notificationsEnabled}
+                        onChange={(e) => {
+                          setNotificationsEnabled(e.target.checked)
+                          if (e.target.checked && Notification.permission !== 'granted') {
+                            Notification.requestPermission()
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                  {notificationsEnabled && (
+                    <button
+                      onClick={testNotification}
+                      className="mt-3 w-full py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                    >
+                      Send Test Alert
+                    </button>
+                  )}
+                </div>
+
+                {/* Trade Size */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Trade Size (Per Position)</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">₹{tradeInvestment}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-slate-500 font-bold">₹</span>
+                    <input 
+                      type="number"
+                      min="10"
+                      max="100000"
+                      value={tradeInvestment}
+                      onChange={(e) => setTradeInvestment(Math.max(10, parseInt(e.target.value) || 0))}
+                      className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5 mt-3">
+                    {[10, 25, 50, 100, 500, 1000].map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => setTradeInvestment(amt)}
+                        className={`py-1.5 text-[10px] font-mono-data font-bold rounded-lg border cursor-pointer transition-all ${
+                          tradeInvestment === amt 
+                            ? 'bg-cyan-500 text-black border-cyan-400' 
+                            : 'bg-[#162035] text-slate-300 border-[#1E2D4A] hover:border-cyan-500/50'
+                        }`}
+                      >
+                        ₹{amt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selection Scope */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Auto-Trade Selection Scope</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setTradeScope('single')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center ${
+                        tradeScope === 'single'
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
+                          : 'bg-[#162035] text-slate-400 border-[#1E2D4A] hover:text-white'
+                      }`}
+                    >
+                      Single Asset ({selectedSymbol.split('/')[0]})
+                    </button>
+                    <button
+                      onClick={() => setTradeScope('rotation')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center ${
+                        tradeScope === 'rotation'
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
+                          : 'bg-[#162035] text-slate-400 border-[#1E2D4A] hover:text-white'
+                      }`}
+                    >
+                      All Rotation ({allowedMarkets.length} active)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Allowed Auto-Trade Markets */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-300 font-bold">Allowed Auto-Trade Markets</span>
+                    <span className="text-[10px] text-cyan-400 font-mono-data font-bold">{allowedMarkets.length} selected</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA'].map((mkt) => (
+                      <label 
+                        key={mkt} 
+                        className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                          allowedMarkets.includes(mkt) 
+                            ? 'bg-cyan-500/10 border-cyan-500/40 text-white' 
+                            : 'bg-[#162035]/50 border-[#1E2D4A] text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={allowedMarkets.includes(mkt)}
+                          onChange={() => toggleAllowedMarket(mkt)}
+                          className="rounded border-[#1E2D4A] text-cyan-500 focus:ring-0 accent-cyan-400"
+                        />
+                        <span className="text-[11px] font-bold font-mono-data">{mkt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Institutional Broker API Gateway */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <span className="text-slate-300 font-bold block mb-2">Institutional Broker API Gateway</span>
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Exchange Brokerage</label>
+                      <select
+                        value={brokerGateway}
+                        onChange={(e) => setBrokerGateway(e.target.value)}
+                        className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 font-bold"
+                      >
+                        <option value="binance">Binance Pro Direct API (Crypto)</option>
+                        <option value="zerodha">Zerodha Kite Connect (NSE/BSE)</option>
+                        <option value="angelone">Angel One SmartAPI (Indian Equities)</option>
+                        <option value="alpaca">Alpaca Securities (US Markets)</option>
+                        <option value="paper">Simulated Execution Engine</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">API Public Key</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. vmPUZE6mv9GFFin2..." 
+                        value={brokerApiKey}
+                        onChange={(e) => setBrokerApiKey(e.target.value)}
+                        className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">API Secret / Token</label>
+                      <input 
+                        type="password" 
+                        placeholder="••••••••••••••••" 
+                        value={brokerApiSecret}
+                        onChange={(e) => setBrokerApiSecret(e.target.value)}
+                        className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('token')
+                      await fetch('/api/user/settings', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': token ? `Bearer ${token}` : ''
+                        },
+                        body: JSON.stringify({
+                          broker_gateway: brokerGateway,
+                          broker_api_key: brokerApiKey,
+                          broker_api_secret: brokerApiSecret,
+                          max_open_positions: maxOpenPositions,
+                          stop_loss_limit: stopLossLimit,
+                          profit_target: profitTarget,
+                          trade_pacing: tradePacing,
+                          enable_whatsapp: false,
+                          whatsapp_number: '',
+                          callmebot_apikey: '',
+                          telegram_bot_token: '',
+                          telegram_chat_id: '',
+                          enable_telegram: false
+                        })
+                      })
+                      updateUser({
+                        whatsapp: '',
+                        callmebot_apikey: '',
+                        telegram_bot_token: '',
+                        telegram_chat_id: ''
+                      })
+                      await fetchRealBalance()
+                    } catch (e) {
+                      console.error('Failed to sync settings to backend:', e)
+                    }
+                    setIsSettingsOpen(false)
+                  }}
+                  className="w-full py-3 bg-cyan-400 text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-cyan-300 transition-all cursor-pointer text-center shadow-lg active:scale-95"
+                >
+                  Save & Sync API Keys
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )
