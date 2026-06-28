@@ -202,8 +202,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     localStorage.setItem('enableDesktopNotifications', enableDesktopNotifications)
-    if (enableDesktopNotifications && Notification.permission === 'default') {
-      Notification.requestPermission()
+    if (enableDesktopNotifications && typeof window !== 'undefined' && 'Notification' in window && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission()
+      } catch (e) {
+        // Ignored on unsupported mobile browsers
+      }
     }
   }, [enableDesktopNotifications])
   // Notification Feed
@@ -1459,7 +1463,7 @@ export default function Dashboard() {
   }
 
   const triggerDesktopNotification = (title, body) => {
-    if (enableDesktopNotifications && Notification.permission === 'granted') {
+    if (enableDesktopNotifications && typeof window !== 'undefined' && 'Notification' in window && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         new Notification(title, {
           body,
@@ -1865,8 +1869,8 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (!('Notification' in window)) {
-                              setTestNotifStatus('❌ Not supported by browser')
+                            if (typeof window === 'undefined' || !('Notification' in window) || typeof Notification === 'undefined') {
+                              setTestNotifStatus('❌ Not supported by mobile browser')
                               return
                             }
                             
@@ -1883,7 +1887,7 @@ export default function Dashboard() {
                                   new Notification("🔔 Notifications Enabled!", {
                                     body: "Direct trade alerts from CryptoAI Trader are active!"
                                   })
-                                  setTestNotifStatus('✅ Sent! (Check Windows notifications)')
+                                  setTestNotifStatus('✅ Sent!')
                                 } else {
                                   setTestNotifStatus('❌ Permission denied')
                                 }
@@ -1892,7 +1896,7 @@ export default function Dashboard() {
                               new Notification("🔔 Test Notification", {
                                 body: "Direct trade alerts from CryptoAI Trader are working perfectly!"
                               })
-                              setTestNotifStatus('✅ Sent! (Check Windows notifications)')
+                              setTestNotifStatus('✅ Sent!')
                             }
                           }}
                           className="px-2.5 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-bold hover:bg-cyan-500/20 cursor-pointer transition-all flex items-center space-x-1"
