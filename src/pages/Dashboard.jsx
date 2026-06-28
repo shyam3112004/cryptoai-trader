@@ -2157,7 +2157,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Pages Switcher */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex-1 md:overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32">
           
           {/* TAB 1: MAIN DASHBOARD */}
           {currentTab === 'dashboard' && (
