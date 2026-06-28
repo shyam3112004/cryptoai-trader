@@ -2126,7 +2126,7 @@ export default function Dashboard() {
                       </div>
                       <input 
                         type="range" 
-                        min="10" 
+                        min={getCurrencySymbol() === '$' ? 5 : 10} 
                         max="5000" 
                         step="5"
                         value={tradeInvestment}
@@ -2134,7 +2134,7 @@ export default function Dashboard() {
                         className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer mb-2.5"
                       />
                       <div className="grid grid-cols-6 gap-1">
-                        {[10, 25, 50, 100, 500, 1000].map(amt => (
+                        {(getCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map(amt => (
                           <button
                             key={amt}
                             type="button"
@@ -3712,15 +3712,15 @@ export default function Dashboard() {
                     <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
                     <input 
                       type="number"
-                      min="10"
+                      min={getCurrencySymbol() === '$' ? "5" : "10"}
                       max="100000"
                       value={tradeInvestment}
-                      onChange={(e) => setTradeInvestment(Math.max(10, parseInt(e.target.value) || 0))}
+                      onChange={(e) => setTradeInvestment(Math.max(getCurrencySymbol() === '$' ? 5 : 10, parseInt(e.target.value) || 0))}
                       className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
                     />
                   </div>
                   <div className="grid grid-cols-6 gap-1.5 mt-3">
-                    {[10, 25, 50, 100, 500, 1000].map((amt) => (
+                    {(getCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map((amt) => (
                       <button
                         key={amt}
                         onClick={() => setTradeInvestment(amt)}
