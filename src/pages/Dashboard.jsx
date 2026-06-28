@@ -68,8 +68,12 @@ export default function Dashboard() {
   })
 
   const [enabledAutoTradeMarkets, setEnabledAutoTradeMarkets] = useState(() => {
-    const saved = localStorage.getItem('enabledAutoTradeMarkets')
-    return saved ? JSON.parse(saved) : ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+    try {
+      const saved = localStorage.getItem('enabledAutoTradeMarkets')
+      return saved ? JSON.parse(saved) : ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+    } catch (e) {
+      return ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+    }
   })
 
   const [brokerGateway, setBrokerGateway] = useState(() => localStorage.getItem('brokerGateway') || 'Angel One SmartAPI (100% FREE Lifetime Access)')
@@ -226,23 +230,40 @@ export default function Dashboard() {
 
   // Execution Log (Dashboard view)
   const [logs, setLogs] = useState(() => {
-    const saved = localStorage.getItem('tradeLogs')
-    return saved ? JSON.parse(saved) : [
-      { id: 1, time: '14:22:01', action: 'BUY BTC', qty: '0.45 @ $64,231.20', pnl: '+$245.00', type: 'buy', progress: 74 },
-      { id: 2, time: '14:18:45', action: 'SELL ETH', qty: '4.20 @ $3,450.12', pnl: '-$12.40', type: 'sell', progress: 42 }
-    ]
+    try {
+      const saved = localStorage.getItem('tradeLogs')
+      return saved ? JSON.parse(saved) : [
+        { id: 1, time: '14:22:01', action: 'BUY BTC', qty: '0.45 @ $64,231.20', pnl: '+$245.00', type: 'buy', progress: 74 },
+        { id: 2, time: '14:18:45', action: 'SELL ETH', qty: '4.20 @ $3,450.12', pnl: '-$12.40', type: 'sell', progress: 42 }
+      ]
+    } catch (e) {
+      return [
+        { id: 1, time: '14:22:01', action: 'BUY BTC', qty: '0.45 @ $64,231.20', pnl: '+$245.00', type: 'buy', progress: 74 },
+        { id: 2, time: '14:18:45', action: 'SELL ETH', qty: '4.20 @ $3,450.12', pnl: '-$12.40', type: 'sell', progress: 42 }
+      ]
+    }
   })
 
   // Historical Trade Data
   const [tradeHistory, setTradeHistory] = useState(() => {
-    const saved = localStorage.getItem('tradeHistory')
-    return saved ? JSON.parse(saved) : [
-      { id: 1, date: '2026-06-27 14:22:01', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$245.00', returnPct: '+2.45%', status: 'TARGET HIT' },
-      { id: 2, date: '2026-06-27 14:18:45', pair: 'ETH / USDT', type: 'SHORT', leverage: '10X', profit: '-$12.40', returnPct: '-0.36%', status: 'STOP LOSS' },
-      { id: 3, date: '2026-06-27 11:05:12', pair: 'SOL / USDT', type: 'LONG', leverage: '5X', profit: '+$412.80', returnPct: '+8.25%', status: 'TARGET HIT' },
-      { id: 4, date: '2026-06-26 18:32:00', pair: 'ADA / USDT', type: 'LONG', leverage: '10X', profit: '-$45.00', returnPct: '-2.00%', status: 'STOP LOSS' },
-      { id: 5, date: '2026-06-26 09:14:22', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$890.00', returnPct: '+5.00%', status: 'MANUAL CLOSE' }
-    ]
+    try {
+      const saved = localStorage.getItem('tradeHistory')
+      return saved ? JSON.parse(saved) : [
+        { id: 1, date: '2026-06-27 14:22:01', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$245.00', returnPct: '+2.45%', status: 'TARGET HIT' },
+        { id: 2, date: '2026-06-27 14:18:45', pair: 'ETH / USDT', type: 'SHORT', leverage: '10X', profit: '-$12.40', returnPct: '-0.36%', status: 'STOP LOSS' },
+        { id: 3, date: '2026-06-27 11:05:12', pair: 'SOL / USDT', type: 'LONG', leverage: '5X', profit: '+$412.80', returnPct: '+8.25%', status: 'TARGET HIT' },
+        { id: 4, date: '2026-06-26 18:32:00', pair: 'ADA / USDT', type: 'LONG', leverage: '10X', profit: '-$45.00', returnPct: '-2.00%', status: 'STOP LOSS' },
+        { id: 5, date: '2026-06-26 09:14:22', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$890.00', returnPct: '+5.00%', status: 'MANUAL CLOSE' }
+      ]
+    } catch (e) {
+      return [
+        { id: 1, date: '2026-06-27 14:22:01', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$245.00', returnPct: '+2.45%', status: 'TARGET HIT' },
+        { id: 2, date: '2026-06-27 14:18:45', pair: 'ETH / USDT', type: 'SHORT', leverage: '10X', profit: '-$12.40', returnPct: '-0.36%', status: 'STOP LOSS' },
+        { id: 3, date: '2026-06-27 11:05:12', pair: 'SOL / USDT', type: 'LONG', leverage: '5X', profit: '+$412.80', returnPct: '+8.25%', status: 'TARGET HIT' },
+        { id: 4, date: '2026-06-26 18:32:00', pair: 'ADA / USDT', type: 'LONG', leverage: '10X', profit: '-$45.00', returnPct: '-2.00%', status: 'STOP LOSS' },
+        { id: 5, date: '2026-06-26 09:14:22', pair: 'BTC / USDT', type: 'LONG', leverage: '10X', profit: '+$890.00', returnPct: '+5.00%', status: 'MANUAL CLOSE' }
+      ]
+    }
   })
 
   const [historyPage, setHistoryPage] = useState(1)
