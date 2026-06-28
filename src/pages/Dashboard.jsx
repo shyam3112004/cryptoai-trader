@@ -1626,6 +1626,18 @@ export default function Dashboard() {
             <span className="material-symbols-outlined text-xl">dashboard</span>
             <span className="text-sm font-semibold">Main Dashboard</span>
           </button>
+
+          <button
+            onClick={() => setCurrentTab('chart')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all cursor-pointer ${
+              currentTab === 'chart' 
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-[#162035]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">show_chart</span>
+            <span className="text-sm font-semibold">Chart Analysis</span>
+          </button>
           
           <button
             onClick={() => setCurrentTab('algorithms')}
@@ -1688,20 +1700,19 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden">
+      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden w-full max-w-full overflow-x-hidden">
         {/* Top Header Bar */}
-        <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
-          <div className="flex items-center space-x-2 md:space-x-8">
+        <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal w-full max-w-full overflow-x-hidden ${isMounted ? 'active' : ''}`}>
+          <div className="flex items-center space-x-1.5 md:space-x-8">
             <h1 className="text-lg md:text-xl font-headline font-bold flex items-center">
-              <span className="text-cyan-400 mr-1.5 md:mr-2 text-xl md:text-2xl">◈</span>
-              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent hidden sm:inline-block">CryptoAI Trader</span>
-              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent sm:hidden text-sm">CryptoAI</span>
+              <span className="text-cyan-400 mr-1 md:mr-2 text-xl md:text-2xl">◈</span>
+              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent hidden md:inline-block">CryptoAI Trader</span>
             </h1>
             <div className="mode-pill flex items-center p-0.5 md:p-1">
               <button
                 id="btn-demo"
                 onClick={() => handleModeSwitch('demo')}
-                className={`px-3 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
                   activeMode === 'demo' ? 'active-demo' : 'text-slate-500 hover:text-white'
                 }`}
               >
@@ -1710,7 +1721,7 @@ export default function Dashboard() {
               <button
                 id="btn-real"
                 onClick={() => handleModeSwitch('real')}
-                className={`px-3 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
                   activeMode === 'real'
                     ? 'bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.4)]'
                     : 'text-slate-500 hover:text-white'
@@ -1719,14 +1730,14 @@ export default function Dashboard() {
                 REAL
               </button>
             </div>
-            <div className="flex items-center px-2.5 py-1 bg-[#111827] border border-[#1E2D4A] rounded-full text-[11px] md:text-xs font-mono-data text-white">
-              <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold">BAL:</span>
-              <span className="font-bold text-cyan-400">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <div className="flex items-center px-2 py-0.5 md:px-2.5 md:py-1 bg-[#111827] border border-[#1E2D4A] rounded-full text-[10px] md:text-xs font-mono-data text-white">
+              <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold hidden sm:inline">BAL:</span>
+              <span className="font-bold text-cyan-400">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0 })}</span>
             </div>
           </div>
           
-          <div className="flex items-center space-x-1 md:space-x-6">
-            <div className="flex items-center space-x-1 md:space-x-4 pr-1 md:pr-6 md:border-r border-[#1E2D4A] relative">
+          <div className="flex items-center space-x-1 md:space-x-4">
+            <div className="flex items-center space-x-0.5 md:space-x-3 pr-1 md:pr-4 md:border-r border-[#1E2D4A] relative">
               {/* Notifications Popover */}
               <div className="relative" ref={notificationsRef}>
                 <button 
@@ -2525,6 +2536,122 @@ export default function Dashboard() {
                 </div>
               </div>
             </>
+          {/* TAB: DEDICATED GRAPH ANALYSIS */}
+          {currentTab === 'chart' && (
+            <div className="space-y-4">
+              {/* Market Ticker Selector Bar */}
+              <div className="flex items-center space-x-2 overflow-x-auto py-2 px-1 bg-[#0A0F1D] rounded-xl border border-[#1E2D4A] no-scrollbar">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 flex items-center whitespace-nowrap">
+                  <span className="material-symbols-outlined text-sm mr-1 text-cyan-400">show_chart</span>
+                  Select Market:
+                </span>
+                {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS'].map((pair) => (
+                  <button
+                    key={pair}
+                    onClick={() => setSelectedSymbol(pair)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                      selectedSymbol === pair
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                        : 'bg-[#111827] border-[#1E2D4A] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {pair}
+                  </button>
+                ))}
+              </div>
+
+              {/* Full-Screen Technical Analysis Chart */}
+              <section className="premium-card rounded-xl overflow-hidden h-[480px] md:h-[620px] flex flex-col shadow-2xl">
+                <div className="h-14 flex items-center justify-between px-4 md:px-6 bg-[#0A0F1D] border-b border-[#1E2D4A] relative select-none">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-7 h-7 bg-yellow-500 rounded-full flex items-center justify-center text-xs font-bold text-black font-headline shadow-md">
+                        {selectedSymbol.includes('BTC') ? '₿' : selectedSymbol.includes('ETH') ? 'Ξ' : selectedSymbol.includes('SOL') ? '◎' : 'S'}
+                      </div>
+                      <div>
+                        <span className="text-base font-bold text-white tracking-wide">{selectedSymbol}</span>
+                        <span className="text-[9px] text-slate-400 block font-mono-data">TECHNICAL ANALYSIS STREAM</span>
+                      </div>
+                    </div>
+                    
+                    {/* Live OHLC hover indicators */}
+                    {hoveredCandleData && (
+                      <div className="flex items-center space-x-3 text-[11px] font-mono-data text-slate-400 pl-4 border-l border-[#1E2D4A] ml-4 hidden lg:flex">
+                        <span>O: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>H: <span className="text-white">{hoveredCandleData.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>L: <span className="text-white">{hoveredCandleData.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>C: <span className={hoveredCandleData.close >= hoveredCandleData.open ? 'text-[#00E676]' : 'text-[#FF3D57]'}>{hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 md:space-x-4 relative h-full">
+                    {/* Zoom Buttons */}
+                    <div className="flex items-center space-x-1 pr-2 md:pr-4 border-r border-[#1E2D4A] h-2/3">
+                      <button 
+                        onClick={() => setZoomLevel(prev => Math.max(15, prev - 5))}
+                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
+                        title="Zoom In (Fewer Candles)"
+                      >
+                        <span className="material-symbols-outlined text-base">zoom_in</span>
+                      </button>
+                      <button 
+                        onClick={() => setZoomLevel(prev => Math.min(80, prev + 5))}
+                        className="w-7 h-7 rounded bg-[#162035] hover:bg-[#1E2D4A] flex items-center justify-center text-cyan-400 cursor-pointer transition-all"
+                        title="Zoom Out (More Candles)"
+                      >
+                        <span className="material-symbols-outlined text-base">zoom_out</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center space-x-1 bg-[#111827] p-1 rounded-lg border border-[#1E2D4A] h-9 overflow-x-auto max-w-[160px] md:max-w-none">
+                      {['1s', '1m', '5m', '15m', '1h', '1d'].map((tf) => (
+                        <button
+                          key={tf}
+                          onClick={() => setTimeframe(tf)}
+                          className={`px-2 py-0.5 md:px-2.5 md:py-1 text-[10px] font-bold rounded transition-all cursor-pointer uppercase ${
+                            timeframe === tf 
+                              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
+                              : 'text-slate-400 hover:text-white hover:bg-[#162035]'
+                          }`}
+                        >
+                          {tf}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 chart-container relative overflow-hidden bg-[#080C18]">
+                  <canvas 
+                    ref={canvasRef} 
+                    className="w-full h-full block cursor-crosshair"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onWheel={handleWheel}
+                  />
+                </div>
+
+                <div className="h-10 bg-[#0A0F1D] border-t border-[#1E2D4A] px-4 md:px-6 flex items-center justify-between text-[10px] font-mono-data text-slate-500 select-none">
+                  <div className="flex space-x-4 md:space-x-6">
+                    {hoveredCandleData ? (
+                      <>
+                        <span>O: <span className="text-white">${hoveredCandleData.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                        <span>C: <span className="text-white">${hoveredCandleData.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                      </>
+                    ) : (
+                      <span>Live Real-Time Candlestick Chart Stream</span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyStopped ? 'bg-red-500' : 'bg-[#00E676]'}`}></span>
+                    <span className="font-bold text-white">{isEmergencyStopped ? 'OFFLINE' : 'LIVE ACCURATE DATA'}</span>
+                  </div>
+                </div>
+              </section>
+            </div>
           )}
 
           {/* TAB 2: ALGORITHMS HUD */}
@@ -3046,45 +3173,55 @@ export default function Dashboard() {
         </footer>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0F1D]/95 backdrop-blur-md border-t border-[#1E2D4A] px-2 py-2 flex justify-around items-center">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0F1D]/95 backdrop-blur-md border-t border-[#1E2D4A] px-1 py-1.5 flex justify-around items-center">
           <button
             onClick={() => setCurrentTab('dashboard')}
-            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
               currentTab === 'dashboard' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
             }`}
           >
-            <span className="material-symbols-outlined text-xl">dashboard</span>
-            <span className="text-[10px] font-bold">Terminal</span>
+            <span className="material-symbols-outlined text-lg">dashboard</span>
+            <span className="text-[9px] font-bold">Terminal</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('chart')}
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'chart' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">show_chart</span>
+            <span className="text-[9px] font-bold">Chart</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('algorithms')}
-            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
               currentTab === 'algorithms' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
             }`}
           >
-            <span className="material-symbols-outlined text-xl">memory</span>
-            <span className="text-[10px] font-bold">Algos</span>
+            <span className="material-symbols-outlined text-lg">memory</span>
+            <span className="text-[9px] font-bold">Algos</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('history')}
-            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
               currentTab === 'history' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
             }`}
           >
-            <span className="material-symbols-outlined text-xl">list_alt</span>
-            <span className="text-[10px] font-bold">History</span>
+            <span className="material-symbols-outlined text-lg">list_alt</span>
+            <span className="text-[9px] font-bold">History</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('signals')}
-            className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-lg transition-all cursor-pointer ${
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
               currentTab === 'signals' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
             }`}
           >
-            <span className="material-symbols-outlined text-xl">insights</span>
-            <span className="text-[10px] font-bold">Signals</span>
+            <span className="material-symbols-outlined text-lg">insights</span>
+            <span className="text-[9px] font-bold">Signals</span>
           </button>
         </nav>
       </main>
