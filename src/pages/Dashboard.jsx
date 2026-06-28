@@ -130,6 +130,39 @@ export default function Dashboard() {
     return val !== null ? val : 'rapid'
   })
 
+  // Chart, symbol selection & emergency stop states
+  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
+  const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false)
+  const [isEmergencyStopped, setIsEmergencyStopped] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(40)
+  const [panOffset, setPanOffset] = useState(0)
+  const [hoveredCandleData, setHoveredCandleData] = useState(null)
+  const [chartMarkers, setChartMarkers] = useState([])
+  const [chartData, setChartData] = useState([])
+  const [symbolSearchTerm, setSymbolSearchTerm] = useState('')
+  const [customSymbolInput, setCustomSymbolInput] = useState('')
+
+  // Settings & notification states
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true)
+  const [enableDesktopNotifications, setEnableDesktopNotifications] = useState(() => {
+    const val = localStorage.getItem('enableDesktopNotifications')
+    return val !== null ? val === 'true' : true
+  })
+  const [testNotifStatus, setTestNotifStatus] = useState('')
+
+  // Dynamic currency helpers
+  const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
+  const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
+  const setTradeInvestment = (val) => {
+    if (isCryptoActive) {
+      setTradeInvestmentUSD(val)
+    } else {
+      setTradeInvestmentINR(val)
+    }
+  }
+
   const realizedBalanceRef = useRef(realizedBalance)
   const realizedTodayPnlRef = useRef(realizedTodayPnl)
   const realAccountBalanceRef = useRef(realAccountBalance)
@@ -239,34 +272,9 @@ export default function Dashboard() {
   const [redFlash, setRedFlash] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
 
-  // Interactive chart controls, symbol selection & emergency stop states
-  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
-  const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false)
-  const [isEmergencyStopped, setIsEmergencyStopped] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState(40)
-  const [panOffset, setPanOffset] = useState(0)
-  const [hoveredCandleData, setHoveredCandleData] = useState(null)
-  const [chartMarkers, setChartMarkers] = useState([])
-  const [chartData, setChartData] = useState([])  // triggers re-render when real data loads
-  const autoTradeRef = useRef(autoTrade)
-  
   useEffect(() => {
     autoTradeRef.current = autoTrade
   }, [autoTrade])
-  const [symbolSearchTerm, setSymbolSearchTerm] = useState('')
-  const [customSymbolInput, setCustomSymbolInput] = useState('')
-
-  // Notifications and Settings popover states
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true)
-
-
-  const [enableDesktopNotifications, setEnableDesktopNotifications] = useState(() => {
-    const val = localStorage.getItem('enableDesktopNotifications')
-    return val !== null ? val === 'true' : true
-  })
-  const [testNotifStatus, setTestNotifStatus] = useState('')
 
   useEffect(() => {
     localStorage.setItem('enableDesktopNotifications', enableDesktopNotifications)
@@ -278,6 +286,7 @@ export default function Dashboard() {
       }
     }
   }, [enableDesktopNotifications])
+
   // Notification Feed
   const [notifications, setNotifications] = useState([
     { id: 1, title: '🟢 BTC/USDT Buy Executed', desc: 'AI confidence 87%. Executed at $64,231.20.', time: 'Just now' },
@@ -295,15 +304,6 @@ export default function Dashboard() {
   const dragStartRef = useRef(null)
   const costBasisRef = useRef(null)
   const selectedSymbolRef = useRef(selectedSymbol)
-  const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
-  const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
-  const setTradeInvestment = (val) => {
-    if (isCryptoActive) {
-      setTradeInvestmentUSD(val)
-    } else {
-      setTradeInvestmentINR(val)
-    }
-  }
   const cooldownRef = useRef(0)
 
   // Algorithm retraining simulation state
