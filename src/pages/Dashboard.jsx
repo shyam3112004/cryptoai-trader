@@ -3335,9 +3335,9 @@ export default function Dashboard() {
                     onChange={(e) => setTradePacing(e.target.value)}
                     className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer font-bold"
                   >
-                    <option value="scalping">Scalping (Aggressive - 1s stream)</option>
-                    <option value="balanced">Balanced (Standard - 3s stream)</option>
-                    <option value="conservative">Conservative (Safe - 5s stream)</option>
+                    <option value="rapid">Rapid (Trades every 2-4 seconds - Testing)</option>
+                    <option value="controlled">Controlled (Trades every 15-30 seconds - Demo)</option>
+                    <option value="standard">Standard (Trades every 2-5 minutes - Live Pacing)</option>
                   </select>
                 </div>
 
@@ -3493,11 +3493,11 @@ export default function Dashboard() {
                         onChange={(e) => setBrokerGateway(e.target.value)}
                         className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 font-bold"
                       >
-                        <option value="binance">Binance Pro Direct API (Crypto)</option>
-                        <option value="zerodha">Zerodha Kite Connect (NSE/BSE)</option>
-                        <option value="angelone">Angel One SmartAPI (Indian Equities)</option>
-                        <option value="alpaca">Alpaca Securities (US Markets)</option>
-                        <option value="paper">Simulated Execution Engine</option>
+                        <option value="Binance Exchange API (Spot Trading)">Binance Exchange API (Spot Trading)</option>
+                        <option value="Angel One SmartAPI (100% FREE Lifetime Access)">Angel One SmartAPI (100% FREE Lifetime)</option>
+                        <option value="Shoonya by Finvasia (100% FREE & Zero Brokerage)">Shoonya Finvasia (100% FREE & Zero Commission)</option>
+                        <option value="Upstox v2 API (Free Developer Tier)">Upstox v2 API (Free Tier)</option>
+                        <option value="Zerodha Kite Connect API">Zerodha Kite Connect (Paid Credits)</option>
                       </select>
                     </div>
                     <div>
