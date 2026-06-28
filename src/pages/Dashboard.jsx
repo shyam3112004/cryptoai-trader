@@ -3432,9 +3432,9 @@ export default function Dashboard() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => setTradeScope('single')}
+                      onClick={() => setAutoTradeMode('single')}
                       className={`py-2 px-3 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center ${
-                        tradeScope === 'single'
+                        autoTradeMode === 'single'
                           ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
                           : 'bg-[#162035] text-slate-400 border-[#1E2D4A] hover:text-white'
                       }`}
@@ -3442,14 +3442,14 @@ export default function Dashboard() {
                       Single Asset ({selectedSymbol.split('/')[0]})
                     </button>
                     <button
-                      onClick={() => setTradeScope('rotation')}
+                      onClick={() => setAutoTradeMode('rotation')}
                       className={`py-2 px-3 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center ${
-                        tradeScope === 'rotation'
+                        autoTradeMode === 'rotation'
                           ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
                           : 'bg-[#162035] text-slate-400 border-[#1E2D4A] hover:text-white'
                       }`}
                     >
-                      All Rotation ({allowedMarkets.length} active)
+                      All Rotation ({enabledAutoTradeMarkets.length} active)
                     </button>
                   </div>
                 </div>
@@ -3458,22 +3458,22 @@ export default function Dashboard() {
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-slate-300 font-bold">Allowed Auto-Trade Markets</span>
-                    <span className="text-[10px] text-cyan-400 font-mono-data font-bold">{allowedMarkets.length} selected</span>
+                    <span className="text-[10px] text-cyan-400 font-mono-data font-bold">{enabledAutoTradeMarkets.length} selected</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                     {['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA'].map((mkt) => (
                       <label 
                         key={mkt} 
                         className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                          allowedMarkets.includes(mkt) 
+                          enabledAutoTradeMarkets.includes(mkt) 
                             ? 'bg-cyan-500/10 border-cyan-500/40 text-white' 
                             : 'bg-[#162035]/50 border-[#1E2D4A] text-slate-400 hover:text-slate-200'
                         }`}
                       >
                         <input
                           type="checkbox"
-                          checked={allowedMarkets.includes(mkt)}
-                          onChange={() => toggleAllowedMarket(mkt)}
+                          checked={enabledAutoTradeMarkets.includes(mkt)}
+                          onChange={() => setEnabledAutoTradeMarkets(prev => prev.includes(mkt) ? prev.filter(x => x !== mkt) : [...prev, mkt])}
                           className="rounded border-[#1E2D4A] text-cyan-500 focus:ring-0 accent-cyan-400"
                         />
                         <span className="text-[11px] font-bold font-mono-data">{mkt}</span>
