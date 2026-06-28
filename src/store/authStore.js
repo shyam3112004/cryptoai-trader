@@ -31,7 +31,15 @@ export const useAuthStore = create()(
               whatsapp_number: data.whatsapp_number || null
             })
           })
-          const json = await res.json()
+          
+          let json
+          const text = await res.text()
+          try {
+            json = JSON.parse(text)
+          } catch (e) {
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100) || 'Invalid response'}`)
+          }
+
           if (!res.ok) throw new Error(json.detail || 'Registration failed')
           
           set({
@@ -77,7 +85,14 @@ export const useAuthStore = create()(
               remember_me: data.remember_me || false
             })
           })
-          const json = await res.json()
+          
+          let json
+          const text = await res.text()
+          try {
+            json = JSON.parse(text)
+          } catch (e) {
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100) || 'Invalid response'}`)
+          }
           
           if (!res.ok) {
             // Check if server locked the account

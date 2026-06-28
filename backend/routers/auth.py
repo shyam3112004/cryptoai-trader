@@ -43,11 +43,24 @@ class TokenResponse(BaseModel):
     expires_in: int
     user: UserResponse
 
+import hashlib
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        print(f"[Auth] Warning: Passlib bcrypt failed ({e}). Using sha256 fallback.")
+        return "sha256$" + hashlib.sha256((password + "cryptoai_salt").encode('utf-8')).hexdigest()
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        if hashed.startswith("sha256$"):
+            expected = "sha256$" + hashlib.sha256((plain + "cryptoai_salt").encode('utf-8')).hexdigest()
+            return hashed == expected
+        return pwd_context.verify(plain, hashed)
+    except Exception:
+        expected = "sha256$" + hashlib.sha256((plain + "cryptoai_salt").encode('utf-8')).hexdigest()
+        return hashed == expected
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -57,56 +70,66 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 
 @router.post("/register", response_model=TokenResponse)
 async def register(request: SignUpRequest, db: AsyncSession = Depends(get_db_session)):
-    email_key = request.email.lower()
-    
-    # Check if email exists in DB
-    result = await db.execute(select(User).filter(User.email == email_key))
-    existing_user = result.scalars().first()
-    
-    if existing_user:
+    try:
+        email_key = request.email.lower()
+        
+        # Check if email exists in DB
+        result = await db.execute(select(User).filter(User.email == email_key))
+        existing_user = result.scalars().first()
+        
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists."
+            )
+
+        # Hash password & create user
+        hashed_pw = hash_password(request.password)
+        new_user = User(
+            full_name=request.full_name,
+            email=request.email.lower(),
+            password_hash=hashed_pw,
+            whatsapp_number=request.whatsapp_number,
+            active_mode="demo"
+        )
+        
+        db.add(new_user)
+        await db.flush() # Flush to populate user ID
+
+        # Create default user settings
+        default_settings = UserSetting(
+            user_id=new_user.id,
+            max_open_positions=3,
+            stop_loss_limit=2.0,
+            profit_target="1.5X",
+            enable_whatsapp=True
+        )
+        db.add(default_settings)
+        await db.commit()
+
+        # Generate token
+        token = create_access_token({"sub": new_user.id, "email": new_user.email})
+        
+        return TokenResponse(
+            access_token=token,
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+            user=UserResponse(
+                id=new_user.id,
+                name=new_user.full_name,
+                email=new_user.email,
+                mode=new_user.active_mode,
+                whatsapp_number=new_user.whatsapp_number
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Auth] Registration unexpected error: {e}")
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
         )
 
-    # Hash password & create user
-    hashed_pw = hash_password(request.password)
-    new_user = User(
-        full_name=request.full_name,
-        email=request.email.lower(),
-        password_hash=hashed_pw,
-        whatsapp_number=request.whatsapp_number,
-        active_mode="demo"
-    )
-    
-    db.add(new_user)
-    await db.flush() # Flush to populate user ID
-
-    # Create default user settings
-    default_settings = UserSetting(
-        user_id=new_user.id,
-        max_open_positions=3,
-        stop_loss_limit=2.0,
-        profit_target="1.5X",
-        enable_whatsapp=True
-    )
-    db.add(default_settings)
-    await db.commit()
-
-    # Generate token
-    token = create_access_token({"sub": new_user.id, "email": new_user.email})
-    
-    return TokenResponse(
-        access_token=token,
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600,
-        user=UserResponse(
-            id=new_user.id,
-            name=new_user.full_name,
-            email=new_user.email,
-            mode=new_user.active_mode,
-            whatsapp_number=new_user.whatsapp_number
-        )
-    )
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db_session)):
