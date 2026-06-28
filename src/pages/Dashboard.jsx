@@ -3351,26 +3351,44 @@ export default function Dashboard() {
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={notificationsEnabled}
-                        onChange={(e) => {
-                          setNotificationsEnabled(e.target.checked)
-                          if (e.target.checked && Notification.permission !== 'granted') {
-                            Notification.requestPermission()
-                          }
-                        }}
+                        checked={enableDesktopNotifications}
+                        onChange={(e) => setEnableDesktopNotifications(e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
                   </div>
-                  {notificationsEnabled && (
-                    <button
-                      onClick={testNotification}
-                      className="mt-3 w-full py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
-                    >
-                      Send Test Alert
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window === 'undefined' || !('Notification' in window) || typeof Notification === 'undefined') {
+                        setTestNotifStatus('❌ Not supported by mobile browser')
+                        return
+                      }
+                      setTestNotifStatus('Sending...')
+                      if (Notification.permission === 'denied') {
+                        setTestNotifStatus('❌ Denied by browser settings')
+                        return
+                      }
+                      if (Notification.permission !== 'granted') {
+                        Notification.requestPermission().then(perm => {
+                          if (perm === 'granted') {
+                            new Notification("🔔 Notifications Enabled!", { body: "Direct trade alerts active!" })
+                            setTestNotifStatus('✅ Sent!')
+                          } else {
+                            setTestNotifStatus('❌ Permission denied')
+                          }
+                        })
+                      } else {
+                        new Notification("🔔 Test Notification", { body: "Direct trade alerts working!" })
+                        setTestNotifStatus('✅ Sent!')
+                      }
+                    }}
+                    className="mt-3 w-full py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>🔔 Send Test Alert</span>
+                    {testNotifStatus && <span className="text-[10px] text-cyan-300 ml-1">({testNotifStatus})</span>}
+                  </button>
                 </div>
 
                 {/* Trade Size */}
