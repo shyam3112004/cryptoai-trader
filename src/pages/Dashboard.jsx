@@ -2172,8 +2172,170 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 my-2">
+                {/* AI Signal Card */}
+                <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between">
+                  <div className="flex justify-between items-start mb-2 md:mb-0">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">AI Signal Pulse</p>
+                      <div className="flex items-baseline space-x-2">
+                        {isEmergencyStopped ? (
+                          <>
+                            <span className="text-2xl md:text-3xl font-headline font-bold text-[#FF3D57]">HALT</span>
+                            <span className="text-xs md:text-sm font-headline text-slate-500">/ LOCKDOWN</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-2xl md:text-3xl font-headline font-bold text-[#00E676]">BUY</span>
+                            <span className="text-xs md:text-sm font-headline text-slate-500">/ LONG</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`px-2.5 py-1 rounded text-[10px] font-bold ${
+                      isEmergencyStopped 
+                        ? 'bg-red-500/10 border border-red-500/30 text-red-500'
+                        : isMarketClosed
+                        ? 'bg-slate-500/10 border border-slate-500/30 text-slate-400'
+                        : autoTrade ? 'bg-[#00E676]/10 border border-[#00E676]/30 text-[#00E676]' : 'bg-[#FFB300]/10 border border-[#FFB300]/30 text-[#FFB300]'
+                    }`}>
+                      {isEmergencyStopped ? 'HALTED' : isMarketClosed ? 'MARKET CLOSED' : autoTrade ? 'ACTIVE' : 'PAUSED'}
+                    </div>
+                  </div>
+                  <div className="my-2 flex items-center justify-center">
+                    <div className="orb-container">
+                      <div 
+                        className={`orb-core ${isEmergencyStopped ? 'animate-pulse' : ''}`} 
+                        style={{ 
+                          backgroundColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300'), 
+                          boxShadow: isEmergencyStopped ? '0 0 20px #FF3D57' : (autoTrade ? '0 0 20px #00E676' : '0 0 20px #FFB300') 
+                        }}
+                      ></div>
+                      <div className="orb-ring" style={{ borderColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300') }}></div>
+                      <div className="orb-ring orb-ring-2" style={{ borderColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300') }}></div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-end mt-auto pt-2 border-t border-[#1E2D4A]/40">
+                    <div>
+                      <p className="text-[9px] text-slate-500 font-mono-data mb-0.5">CONFIDENCE</p>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg font-mono-data text-white">{isEmergencyStopped ? '0%' : '87%'}</span>
+                        <div className="w-16 h-1 bg-[#111827] rounded-full overflow-hidden">
+                          <div className="h-full bg-[#00E676]" style={{ width: isEmergencyStopped ? '0%' : '87%', backgroundColor: isEmergencyStopped ? '#FF3D57' : '#00E676' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[9px] font-mono-data text-[#445577]">{isEmergencyStopped ? 'LOCKDOWN' : '6/9 ALGOS'}</p>
+                  </div>
+                </div>
+
+                {/* Portfolio Card */}
+                <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Live Portfolio</p>
+                    <button
+                      onClick={resetWalletBalance}
+                      className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center space-x-1"
+                      title="Reset Wallet Balance back to starting ₹10,000.00"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500">Total Balance</p>
+                    <h2 className={`text-2xl md:text-3xl font-mono-data font-bold text-white tracking-tight ${isPriceFlashing ? 'price-flash' : ''}`}>
+                      ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </h2>
+                  </div>
+                  <div className="my-3 grid grid-cols-2 gap-2">
+                    <div className="p-2 md:p-3 rounded-lg border border-[#1E2D4A] bg-[#080C18]/40">
+                      <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-bold mb-0.5">Today P&L</p>
+                      <div className="flex items-center space-x-1">
+                        <span className={`text-xs md:text-sm font-mono-data ${todayPnl >= 0 ? 'text-[#00E676]' : 'text-[#FF3D57]'}`}>
+                          {todayPnl >= 0 ? `+₹${todayPnl.toFixed(2)}` : `-₹${Math.abs(todayPnl).toFixed(2)}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-2 md:p-3 rounded-lg border border-[#1E2D4A] bg-[#080C18]/40">
+                      <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-bold mb-0.5">Win Rate</p>
+                      <p className="text-xs md:text-sm font-mono-data text-cyan-400">68.4%</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-[9px] font-mono-data text-slate-500 pt-1 border-t border-[#1E2D4A]/40">
+                    <span>LEVERAGE: 10X</span>
+                    <span>STATUS: OPTIMIZED</span>
+                  </div>
+                </div>
+
+                {/* Target Card (Profit Targets 1.2X, 1.5X, 2.0X) */}
+                <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between sm:col-span-2 md:col-span-1">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Profit Targets</p>
+                    <span className="material-symbols-outlined text-cyan-400 text-sm">track_changes</span>
+                  </div>
+                  <div className="flex space-x-2 mb-3 select-none">
+                    {['1.2X', '1.5X', '2.0X'].map((target) => (
+                      <button
+                        key={target}
+                        onClick={() => setProfitTarget(target)}
+                        className={`flex-1 py-1.5 md:py-2 rounded-lg border text-[10px] md:text-[11px] font-bold cursor-pointer transition-all duration-300 ${
+                          profitTarget === target
+                            ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 shadow-[0_0_15px_rgba(0,200,255,0.15)]'
+                            : 'border-[#1E2D4A] text-slate-500 hover:text-white'
+                        }`}
+                      >
+                        {target}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="space-y-2.5">
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-slate-400">BTC Position</span>
+                        <span className="text-white font-mono-data">74%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '74%' }}></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-slate-400">ETH Position</span>
+                        <span className="text-white font-mono-data">42%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '42%' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Market Ticker Selector Bar */}
+              <div className="flex items-center space-x-2 overflow-x-auto py-1 my-2 no-scrollbar">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pr-1 flex items-center">
+                  <span className="material-symbols-outlined text-xs mr-1 text-cyan-400">show_chart</span>
+                  Markets:
+                </span>
+                {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS'].map((pair) => (
+                  <button
+                    key={pair}
+                    onClick={() => setSelectedSymbol(pair)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                      selectedSymbol === pair
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                        : 'bg-[#0A0F1D] border-[#1E2D4A] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {pair}
+                  </button>
+                ))}
+              </div>
+
               {/* Main Chart Section */}
-              <section className="premium-card rounded-xl overflow-hidden h-[380px] md:h-[540px] flex flex-col my-4">
+              <section className="premium-card rounded-xl overflow-hidden h-[340px] md:h-[540px] flex flex-col my-2">
                 <div className="h-14 flex items-center justify-between px-4 md:px-6 bg-[#0A0F1D] border-b border-[#1E2D4A] relative select-none">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-3">
@@ -2267,150 +2429,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               </section>
-
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* AI Signal Card */}
-                <div className="premium-card rounded-xl p-6 flex flex-col h-56">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">AI Signal Pulse</p>
-                      <div className="flex items-baseline space-x-2">
-                        {isEmergencyStopped ? (
-                          <>
-                            <span className="text-3xl font-headline font-bold text-[#FF3D57]">HALT</span>
-                            <span className="text-sm font-headline text-slate-500">/ LOCKDOWN</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-3xl font-headline font-bold text-[#00E676]">BUY</span>
-                            <span className="text-sm font-headline text-slate-500">/ LONG</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`px-3 py-1 rounded text-[10px] font-bold ${
-                      isEmergencyStopped 
-                        ? 'bg-red-500/10 border border-red-500/30 text-red-500'
-                        : isMarketClosed
-                        ? 'bg-slate-500/10 border border-slate-500/30 text-slate-400'
-                        : autoTrade ? 'bg-[#00E676]/10 border border-[#00E676]/30 text-[#00E676]' : 'bg-[#FFB300]/10 border border-[#FFB300]/30 text-[#FFB300]'
-                    }`}>
-                      {isEmergencyStopped ? 'HALTED' : isMarketClosed ? 'MARKET CLOSED' : autoTrade ? 'ACTIVE' : 'PAUSED'}
-                    </div>
-                  </div>
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="orb-container">
-                      <div 
-                        className={`orb-core ${isEmergencyStopped ? 'animate-pulse' : ''}`} 
-                        style={{ 
-                          backgroundColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300'), 
-                          boxShadow: isEmergencyStopped ? '0 0 20px #FF3D57' : (autoTrade ? '0 0 20px #00E676' : '0 0 20px #FFB300') 
-                        }}
-                      ></div>
-                      <div className="orb-ring" style={{ borderColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300') }}></div>
-                      <div className="orb-ring orb-ring-2" style={{ borderColor: isEmergencyStopped ? '#FF3D57' : (autoTrade ? '#00E676' : '#FFB300') }}></div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-end mt-auto">
-                    <div>
-                      <p className="text-[10px] text-slate-500 font-mono-data mb-1">CONFIDENCE</p>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-xl font-mono-data text-white">{isEmergencyStopped ? '0%' : '87%'}</span>
-                        <div className="w-20 h-1 bg-[#111827] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#00E676]" style={{ width: isEmergencyStopped ? '0%' : '87%', backgroundColor: isEmergencyStopped ? '#FF3D57' : '#00E676' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-mono-data text-[#445577]">{isEmergencyStopped ? 'SHUTDOWN INSTRUCTIONS' : '6 OF 9 ALGORITHMS AGREE'}</p>
-                  </div>
-                </div>
-
-                {/* Portfolio Card */}
-                <div className="premium-card rounded-xl p-6 h-56">
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Live Portfolio</p>
-                    <button
-                      onClick={resetWalletBalance}
-                      className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center space-x-1"
-                      title="Reset Wallet Balance back to starting ₹10,000.00"
-                    >
-                      <span className="material-symbols-outlined text-[12px]">restart_alt</span>
-                      <span>Reset</span>
-                    </button>
-                  </div>
-                  <div className="mt-1">
-                    <p className="text-[11px] text-slate-500">Total Balance</p>
-                    <h2 className={`text-3xl font-mono-data font-bold text-white tracking-tight ${isPriceFlashing ? 'price-flash' : ''}`}>
-                      ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </h2>
-                  </div>
-                  <div className="mt-6 grid grid-cols-2 gap-4">
-                    <div className="p-3 rounded-lg border border-[#1E2D4A] bg-[#080C18]/40">
-                      <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Today P&L</p>
-                      <div className="flex items-center space-x-1">
-                        <span className={`text-sm font-mono-data ${todayPnl >= 0 ? 'text-[#00E676]' : 'text-[#FF3D57]'}`}>
-                          {todayPnl >= 0 ? `+₹${todayPnl.toFixed(2)}` : `-₹${Math.abs(todayPnl).toFixed(2)}`}
-                        </span>
-                        <span className={`material-symbols-outlined text-xs ${todayPnl >= 0 ? 'text-[#00E676] animate-bounce' : 'text-[#FF3D57]'}`}>
-                          {todayPnl >= 0 ? 'north' : 'south'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-lg border border-[#1E2D4A] bg-[#080C18]/40">
-                      <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Win Rate</p>
-                      <p className="text-sm font-mono-data text-cyan-400">68.4%</p>
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-between text-[10px] font-mono-data text-slate-600">
-                    <span>LEVERAGE: 10X</span>
-                    <span>STATUS: OPTIMIZED</span>
-                  </div>
-                </div>
-
-                {/* Target Card */}
-                <div className="premium-card rounded-xl p-6 h-56">
-                  <div className="flex justify-between items-center mb-4">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Profit Targets</p>
-                    <span className="material-symbols-outlined text-cyan-400 text-sm">track_changes</span>
-                  </div>
-                  <div className="flex space-x-2 mb-6 select-none">
-                    {['1.2X', '1.5X', '2.0X'].map((target) => (
-                      <button
-                        key={target}
-                        onClick={() => setProfitTarget(target)}
-                        className={`flex-1 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all duration-300 ${
-                          profitTarget === target
-                            ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 shadow-[0_0_15px_rgba(0,200,255,0.15)]'
-                            : 'border-[#1E2D4A] text-slate-500 hover:text-white'
-                        }`}
-                      >
-                        {target}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">BTC Position</span>
-                        <span className="text-white font-mono-data">74%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '74%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">ETH Position</span>
-                        <span className="text-white font-mono-data">42%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '42%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               {/* Emergency Stop Warning Banner */}
               {isEmergencyStopped && (
