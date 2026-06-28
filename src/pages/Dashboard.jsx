@@ -1830,7 +1830,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden flex-1 min-w-0 overflow-x-hidden">
+      <main className="md:ml-64 flex flex-col h-screen overflow-hidden flex-1 min-w-0">
         {/* Top Header Bar */}
         <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal w-full max-w-full ${isMounted ? 'active' : ''}`}>
           <div className="flex items-center space-x-1.5 md:space-x-8">
@@ -2433,7 +2433,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Pages Switcher */}
-        <div className="flex-1 md:overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32">
           
           {/* TAB 1: MAIN DASHBOARD */}
           {currentTab === 'dashboard' && (
