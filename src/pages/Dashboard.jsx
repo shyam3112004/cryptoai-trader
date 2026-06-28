@@ -1598,7 +1598,7 @@ export default function Dashboard() {
   const winRatePct = totalCount > 0 ? ((winCount / totalCount) * 100).toFixed(1) : '0.0'
 
   return (
-    <div className="selection:bg-primary-container selection:text-on-primary-container font-body-md overflow-hidden min-h-screen relative text-[#dde3e8] bg-[#080C18]">
+    <div className="selection:bg-primary-container selection:text-on-primary-container font-body-md md:overflow-hidden min-h-screen relative text-[#dde3e8] bg-[#080C18]">
       {/* Red Flash Overlay */}
       {redFlash && <div className="red-flash-overlay"></div>}
       
@@ -2148,7 +2148,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Pages Switcher */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-[120px]">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32" style={{ WebkitOverflowScrolling: 'touch' }}>
           
           {/* TAB 1: MAIN DASHBOARD */}
           {currentTab === 'dashboard' && (
@@ -2553,7 +2553,7 @@ export default function Dashboard() {
 
           {/* TAB 3: TRADE HISTORY LOG */}
           {currentTab === 'history' && (
-            <div className="premium-card rounded-xl p-4 md:p-6 overflow-hidden">
+            <div className="premium-card rounded-xl p-4 md:p-6">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <div>
                     <h2 className="text-xl font-headline font-bold text-white">Realized Trade Ledger</h2>
