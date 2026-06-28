@@ -130,16 +130,6 @@ export default function Dashboard() {
     return val !== null ? val : 'rapid'
   })
 
-  const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
-  const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
-  const setTradeInvestment = (val) => {
-    if (isCryptoActive) {
-      setTradeInvestmentUSD(val)
-    } else {
-      setTradeInvestmentINR(val)
-    }
-  }
-
   const realizedBalanceRef = useRef(realizedBalance)
   const realizedTodayPnlRef = useRef(realizedTodayPnl)
   const realAccountBalanceRef = useRef(realAccountBalance)
@@ -305,6 +295,15 @@ export default function Dashboard() {
   const dragStartRef = useRef(null)
   const costBasisRef = useRef(null)
   const selectedSymbolRef = useRef(selectedSymbol)
+  const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
+  const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
+  const setTradeInvestment = (val) => {
+    if (isCryptoActive) {
+      setTradeInvestmentUSD(val)
+    } else {
+      setTradeInvestmentINR(val)
+    }
+  }
   const cooldownRef = useRef(0)
 
   // Algorithm retraining simulation state
