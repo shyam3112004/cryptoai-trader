@@ -1869,7 +1869,7 @@ export default function Dashboard() {
           <div className="flex items-center space-x-1 md:space-x-4">
             <div className="flex items-center space-x-0.5 md:space-x-3 pr-1 md:pr-4 md:border-r border-[#1E2D4A] relative">
               {/* Notifications Popover */}
-              <div className="relative" ref={notificationsRef}>
+              <div className="static md:relative" ref={notificationsRef}>
                 <button 
                   onClick={() => {
                     setIsNotificationsOpen(prev => !prev);
@@ -1885,7 +1885,7 @@ export default function Dashboard() {
                 </button>
                 
                 {/* Popover Card */}
-                <div className={`absolute right-0 mt-2 w-80 rounded-xl border border-[#1E2D4A] bg-[#0F1629] p-4 shadow-2xl transition-all duration-200 z-50 ${
+                <div className={`absolute right-4 left-4 md:left-auto md:right-0 md:w-80 top-16 md:top-full mt-2 rounded-xl border border-[#1E2D4A] bg-[#0F1629] p-4 shadow-2xl transition-all duration-200 z-50 ${
                   isNotificationsOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
                 }`}>
                   <div className="flex justify-between items-center mb-3 border-b border-[#1E2D4A] pb-2">
