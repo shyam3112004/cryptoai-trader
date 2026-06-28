@@ -1797,8 +1797,8 @@ export default function Dashboard() {
                 </button>
                 
                 {/* Popover Card */}
-                <div className={`fixed inset-0 top-0 left-0 w-full h-full md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-[420px] md:h-auto md:max-h-[85vh] overflow-y-auto border border-[#1E2D4A] bg-[#0F1629] p-4 md:p-6 shadow-2xl transition-all duration-200 z-[100] ${
-                  isSettingsOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+                <div className={`fixed inset-0 w-full h-full md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-[420px] md:h-auto md:max-h-[85vh] overflow-y-auto border border-[#1E2D4A] bg-[#0A0F1D] p-4 md:p-6 shadow-2xl transition-all duration-200 z-[999] ${
+                  isSettingsOpen ? 'opacity-100 scale-100 pointer-events-auto block' : 'opacity-0 scale-95 pointer-events-none hidden md:block'
                 }`}>
                   <div className="flex justify-between items-center mb-4 border-b border-[#1E2D4A] pb-3">
                     <div>
@@ -2813,6 +2813,48 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
+                    {/* Top Pagination Controls */}
+                    {tradeHistory.length > 0 && (() => {
+                      const itemsPerPage = 10
+                      const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
+                      return (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 px-2 sm:px-4 border-b border-[#1E2D4A] text-xs text-slate-400 mb-3">
+                          <div className="text-[11px] sm:text-xs text-center sm:text-left font-mono-data">
+                            Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
+                          </div>
+                          <div className="flex items-center space-x-1.5 sm:space-x-2">
+                            <button
+                              disabled={historyPage === 1}
+                              onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
+                            >
+                              Prev
+                            </button>
+                            {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(p => (
+                              <button
+                                key={p}
+                                onClick={() => setHistoryPage(p)}
+                                className={`px-2.5 py-1 text-xs rounded border font-bold font-mono-data cursor-pointer transition-all ${
+                                  historyPage === p 
+                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
+                                    : 'bg-[#162035] border-[#1E2D4A] text-slate-300 hover:bg-cyan-500/20'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                            <button
+                              disabled={historyPage === totalHistoryPages}
+                              onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
+                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
                     <div className="overflow-x-auto w-full max-w-full pb-4">
                       <table className="w-full text-left border-collapse min-w-[750px]">
                         <thead>
@@ -2867,13 +2909,13 @@ export default function Dashboard() {
                         </tbody>
                       </table>
                     </div>
-                    {/* Pagination Controls */}
+                    {/* Bottom Pagination Controls */}
                     {tradeHistory.length > 0 && (() => {
                       const itemsPerPage = 10
                       const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
                       return (
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-2 sm:px-4 border-t border-[#1E2D4A] text-xs text-slate-400 mt-2">
-                          <div className="text-[11px] sm:text-xs text-center sm:text-left">
+                          <div className="text-[11px] sm:text-xs text-center sm:text-left font-mono-data">
                             Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
                           </div>
                           <div className="flex items-center space-x-1.5 sm:space-x-2">
