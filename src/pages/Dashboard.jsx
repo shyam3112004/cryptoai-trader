@@ -80,6 +80,29 @@ export default function Dashboard() {
   const [brokerApiKey, setBrokerApiKey] = useState(() => localStorage.getItem('brokerApiKey') || 'FREE_SMARTAPI_LIVE_KEY_9482')
   const [brokerApiSecret, setBrokerApiSecret] = useState(() => localStorage.getItem('brokerApiSecret') || 'FREE_SMARTAPI_SECRET_7710')
 
+  // Alerts Settings parameters
+  const [enableWhatsapp, setEnableWhatsapp] = useState(() => {
+    const val = localStorage.getItem('enableWhatsapp')
+    return val !== null ? val === 'true' : false
+  })
+  const [whatsappNumber, setWhatsappNumber] = useState(() => {
+    return user?.whatsapp || localStorage.getItem('whatsappNumber') || ''
+  })
+  const [callmebotApikey, setCallmebotApikey] = useState(() => {
+    return user?.callmebot_apikey || localStorage.getItem('callmebotApikey') || ''
+  })
+  
+  const [enableTelegram, setEnableTelegram] = useState(() => {
+    const val = localStorage.getItem('enableTelegram')
+    return val !== null ? val === 'true' : false
+  })
+  const [telegramBotToken, setTelegramBotToken] = useState(() => {
+    return user?.telegram_bot_token || localStorage.getItem('telegramBotToken') || ''
+  })
+  const [telegramChatId, setTelegramChatId] = useState(() => {
+    return user?.telegram_chat_id || localStorage.getItem('telegramChatId') || ''
+  })
+
   // Custom Settings parameters
   const [maxOpenPositions, setMaxOpenPositions] = useState(() => {
     const val = localStorage.getItem('maxOpenPositions')
@@ -122,6 +145,30 @@ export default function Dashboard() {
     localStorage.setItem('tradePacing', tradePacing)
     tradePacingRef.current = tradePacing
   }, [tradePacing])
+
+  useEffect(() => {
+    localStorage.setItem('enableWhatsapp', enableWhatsapp)
+  }, [enableWhatsapp])
+
+  useEffect(() => {
+    localStorage.setItem('whatsappNumber', whatsappNumber)
+  }, [whatsappNumber])
+
+  useEffect(() => {
+    localStorage.setItem('callmebotApikey', callmebotApikey)
+  }, [callmebotApikey])
+
+  useEffect(() => {
+    localStorage.setItem('enableTelegram', enableTelegram)
+  }, [enableTelegram])
+
+  useEffect(() => {
+    localStorage.setItem('telegramBotToken', telegramBotToken)
+  }, [telegramBotToken])
+
+  useEffect(() => {
+    localStorage.setItem('telegramChatId', telegramChatId)
+  }, [telegramChatId])
 
   useEffect(() => {
     activeModeRef.current = activeMode
@@ -386,9 +433,53 @@ export default function Dashboard() {
     }
   }
 
+  const fetchSettingsFromBackend = async () => {
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const res = await fetch(`${apiBase}/api/v1/auth/settings`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.broker_gateway) setBrokerGateway(data.broker_gateway)
+        if (data.broker_api_key) setBrokerApiKey(data.broker_api_key)
+        if (data.broker_api_secret) setBrokerApiSecret(data.broker_api_secret)
+        if (data.max_open_positions) setMaxOpenPositions(data.max_open_positions)
+        if (data.stop_loss_limit) setStopLossLimit(data.stop_loss_limit)
+        if (data.profit_target) setProfitTarget(data.profit_target)
+        if (data.trade_pacing) setTradePacing(data.trade_pacing)
+        
+        // Toggles
+        setEnableWhatsapp(data.enable_whatsapp)
+        setEnableTelegram(data.enable_telegram)
+        
+        // Credentials / Details
+        if (data.whatsapp_number) setWhatsappNumber(data.whatsapp_number)
+        if (data.callmebot_apikey) setCallmebotApikey(data.callmebot_apikey)
+        if (data.telegram_bot_token) setTelegramBotToken(data.telegram_bot_token)
+        if (data.telegram_chat_id) setTelegramChatId(data.telegram_chat_id)
+        
+        // Update user store state as well
+        updateUser({
+          whatsapp: data.whatsapp_number || '',
+          callmebot_apikey: data.callmebot_apikey || '',
+          telegram_bot_token: data.telegram_bot_token || '',
+          telegram_chat_id: data.telegram_chat_id || ''
+        })
+      }
+    } catch (e) {
+      console.error('Failed to fetch settings from backend:', e)
+    }
+  }
+
   useEffect(() => {
     setIsMounted(true)
     generateChartData(timeframe, selectedSymbol)
+    fetchSettingsFromBackend()
 
     // Trigger stagger render for progress bars
     const timers = algoMetrics.map((item, idx) => {
@@ -1599,7 +1690,7 @@ export default function Dashboard() {
   const winRatePct = totalCount > 0 ? ((winCount / totalCount) * 100).toFixed(1) : '0.0'
 
   return (
-    <div className="selection:bg-primary-container selection:text-on-primary-container font-body-md md:overflow-hidden min-h-screen relative text-[#dde3e8] bg-[#080C18]">
+    <div className="selection:bg-primary-container selection:text-on-primary-container font-body-md md:overflow-hidden min-h-screen flex flex-col md:flex-row relative text-[#dde3e8] bg-[#080C18]">
       {/* Red Flash Overlay */}
       {redFlash && <div className="red-flash-overlay"></div>}
       
@@ -1701,9 +1792,9 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden w-full max-w-full overflow-x-hidden">
+      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden flex-1 min-w-0 overflow-x-hidden">
         {/* Top Header Bar */}
-        <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal w-full max-w-full overflow-x-hidden ${isMounted ? 'active' : ''}`}>
+        <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal w-full max-w-full ${isMounted ? 'active' : ''}`}>
           <div className="flex items-center space-x-1.5 md:space-x-8">
             <h1 className="text-lg md:text-xl font-headline font-bold flex items-center">
               <span className="text-cyan-400 mr-1 md:mr-2 text-xl md:text-2xl">◈</span>
@@ -2060,6 +2151,95 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    {/* AI Alert Dispatchers (WhatsApp & Telegram) */}
+                    <div className="border-t border-[#1E2D4A]/50 pt-3 pb-2 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">AI Alert Dispatchers</span>
+                        <span className="text-[9px] text-cyan-400 font-mono-data font-bold">REAL-TIME ALERTS</span>
+                      </div>
+                      
+                      {/* WhatsApp Alerts Toggle */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">WhatsApp Alerts</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={enableWhatsapp}
+                            onChange={(e) => setEnableWhatsapp(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                        </label>
+                      </div>
+
+                      {enableWhatsapp && (
+                        <div className="space-y-1.5 pl-3 border-l border-green-500/30">
+                          <div>
+                            <label className="text-[9px] text-slate-500 uppercase font-bold">WhatsApp Phone Number</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. +919876543210"
+                              value={whatsappNumber}
+                              onChange={(e) => setWhatsappNumber(e.target.value)}
+                              className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-white font-mono-data outline-none focus:border-green-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-500 uppercase font-bold">CallMeBot API Key</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. 123456"
+                              value={callmebotApikey}
+                              onChange={(e) => setCallmebotApikey(e.target.value)}
+                              className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-white font-mono-data outline-none focus:border-green-400"
+                            />
+                            <p className="text-[8px] text-slate-500 mt-0.5">
+                              Get free API key from <a href="https://www.callmebot.com" target="_blank" rel="noreferrer" className="text-green-400 underline">CallMeBot</a>.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Telegram Alerts Toggle */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Telegram Alerts</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={enableTelegram}
+                            onChange={(e) => setEnableTelegram(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                        </label>
+                      </div>
+
+                      {enableTelegram && (
+                        <div className="space-y-1.5 pl-3 border-l border-cyan-500/30">
+                          <div>
+                            <label className="text-[9px] text-slate-500 uppercase font-bold">Telegram Bot Token</label>
+                            <input 
+                              type="password" 
+                              placeholder="e.g. 123456789:ABCdefGhI..."
+                              value={telegramBotToken}
+                              onChange={(e) => setTelegramBotToken(e.target.value)}
+                              className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-white font-mono-data outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-500 uppercase font-bold">Telegram Chat ID</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. 987654321"
+                              value={telegramChatId}
+                              onChange={(e) => setTelegramChatId(e.target.value)}
+                              className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-white font-mono-data outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Institutional Broker API Gateway Panel */}
                     <div className="border-t border-[#1E2D4A]/50 pt-3 pb-2 space-y-2">
                       <div className="flex justify-between items-center">
@@ -2131,19 +2311,19 @@ export default function Dashboard() {
                               stop_loss_limit: stopLossLimit,
                               profit_target: profitTarget,
                               trade_pacing: tradePacing,
-                              enable_whatsapp: false,
-                              whatsapp_number: '',
-                              callmebot_apikey: '',
-                              telegram_bot_token: '',
-                              telegram_chat_id: '',
-                              enable_telegram: false
+                              enable_whatsapp: enableWhatsapp,
+                              whatsapp_number: whatsappNumber,
+                              callmebot_apikey: callmebotApikey,
+                              telegram_bot_token: telegramBotToken,
+                              telegram_chat_id: telegramChatId,
+                              enable_telegram: enableTelegram
                             })
                           })
                           updateUser({
-                            whatsapp: '',
-                            callmebot_apikey: '',
-                            telegram_bot_token: '',
-                            telegram_chat_id: ''
+                            whatsapp: whatsappNumber,
+                            callmebot_apikey: callmebotApikey,
+                            telegram_bot_token: telegramBotToken,
+                            telegram_chat_id: telegramChatId
                           })
                           await fetchRealBalance()
                         } catch (e) {
@@ -3483,6 +3663,92 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* AI Alert Dispatchers (WhatsApp & Telegram) */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A] space-y-3">
+                  <span className="text-slate-300 font-bold block">AI Alert Dispatchers</span>
+                  
+                  {/* WhatsApp Alerts Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">WhatsApp Alerts</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableWhatsapp}
+                        onChange={(e) => setEnableWhatsapp(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                    </label>
+                  </div>
+
+                  {enableWhatsapp && (
+                    <div className="space-y-2.5 pl-3 border-l border-green-500/30">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">WhatsApp Phone Number</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. +919876543210"
+                          value={whatsappNumber}
+                          onChange={(e) => setWhatsappNumber(e.target.value)}
+                          className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-green-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">CallMeBot API Key</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. 123456"
+                          value={callmebotApikey}
+                          onChange={(e) => setCallmebotApikey(e.target.value)}
+                          className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-green-400"
+                        />
+                        <p className="text-[9px] text-slate-500 mt-1">
+                          Get free API key from <a href="https://www.callmebot.com" target="_blank" rel="noreferrer" className="text-green-400 underline">CallMeBot</a>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Telegram Alerts Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Telegram Alerts</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableTelegram}
+                        onChange={(e) => setEnableTelegram(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                    </label>
+                  </div>
+
+                  {enableTelegram && (
+                    <div className="space-y-2.5 pl-3 border-l border-cyan-500/30">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Telegram Bot Token</label>
+                        <input 
+                          type="password" 
+                          placeholder="e.g. 123456789:ABCdefGhI..."
+                          value={telegramBotToken}
+                          onChange={(e) => setTelegramBotToken(e.target.value)}
+                          className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Telegram Chat ID</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. 987654321"
+                          value={telegramChatId}
+                          onChange={(e) => setTelegramChatId(e.target.value)}
+                          className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Institutional Broker API Gateway */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <span className="text-slate-300 font-bold block mb-2">Institutional Broker API Gateway</span>
@@ -3528,7 +3794,8 @@ export default function Dashboard() {
                   onClick={async () => {
                     try {
                       const token = localStorage.getItem('token')
-                      await fetch('/api/user/settings', {
+                      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+                      await fetch(`${apiBase}/api/v1/auth/settings`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',
@@ -3542,19 +3809,19 @@ export default function Dashboard() {
                           stop_loss_limit: stopLossLimit,
                           profit_target: profitTarget,
                           trade_pacing: tradePacing,
-                          enable_whatsapp: false,
-                          whatsapp_number: '',
-                          callmebot_apikey: '',
-                          telegram_bot_token: '',
-                          telegram_chat_id: '',
-                          enable_telegram: false
+                          enable_whatsapp: enableWhatsapp,
+                          whatsapp_number: whatsappNumber,
+                          callmebot_apikey: callmebotApikey,
+                          telegram_bot_token: telegramBotToken,
+                          telegram_chat_id: telegramChatId,
+                          enable_telegram: enableTelegram
                         })
                       })
                       updateUser({
-                        whatsapp: '',
-                        callmebot_apikey: '',
-                        telegram_bot_token: '',
-                        telegram_chat_id: ''
+                        whatsapp: whatsappNumber,
+                        callmebot_apikey: callmebotApikey,
+                        telegram_bot_token: telegramBotToken,
+                        telegram_chat_id: telegramChatId
                       })
                       await fetchRealBalance()
                     } catch (e) {

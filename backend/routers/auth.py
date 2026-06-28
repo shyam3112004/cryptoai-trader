@@ -261,6 +261,21 @@ class SettingsUpdateRequest(BaseModel):
     telegram_chat_id: str | None = None
     enable_telegram: bool | None = None
 
+class SettingsResponse(BaseModel):
+    broker_gateway: str | None = None
+    broker_api_key: str | None = None
+    broker_api_secret: str | None = None
+    max_open_positions: int = 3
+    stop_loss_limit: float = 2.0
+    profit_target: str = "1.5X"
+    trade_pacing: str = "rapid"
+    enable_whatsapp: bool = True
+    enable_telegram: bool = False
+    whatsapp_number: str | None = None
+    callmebot_apikey: str | None = None
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
 @router.post("/settings")
 async def update_settings(
     request: SettingsUpdateRequest,
@@ -305,4 +320,34 @@ async def update_settings(
         
     await db.commit()
     return {"status": "success", "message": "Settings updated successfully"}
+
+@router.get("/settings", response_model=SettingsResponse)
+async def get_settings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    result = await db.execute(select(UserSetting).filter(UserSetting.user_id == current_user.id))
+    user_settings = result.scalars().first()
+    
+    if not user_settings:
+        user_settings = UserSetting(user_id=current_user.id)
+        db.add(user_settings)
+        await db.commit()
+        await db.refresh(user_settings)
+        
+    return SettingsResponse(
+        broker_gateway=user_settings.broker_gateway,
+        broker_api_key=user_settings.broker_api_key,
+        broker_api_secret=user_settings.broker_api_secret,
+        max_open_positions=user_settings.max_open_positions,
+        stop_loss_limit=user_settings.stop_loss_limit,
+        profit_target=user_settings.profit_target,
+        trade_pacing=user_settings.trade_pacing,
+        enable_whatsapp=user_settings.enable_whatsapp,
+        enable_telegram=user_settings.enable_telegram,
+        whatsapp_number=current_user.whatsapp_number,
+        callmebot_apikey=current_user.callmebot_apikey,
+        telegram_bot_token=current_user.telegram_bot_token,
+        telegram_chat_id=current_user.telegram_chat_id
+    )
 

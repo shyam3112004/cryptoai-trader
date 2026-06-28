@@ -14,10 +14,22 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import text
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            try:
-                await conn.execute(text("ALTER TABLE user_settings ADD COLUMN trade_pacing VARCHAR DEFAULT 'rapid'"))
-            except Exception:
-                pass # Already exists
+            
+            migrations = [
+                "ALTER TABLE user_settings ADD COLUMN trade_pacing VARCHAR DEFAULT 'rapid'",
+                "ALTER TABLE users ADD COLUMN callmebot_apikey VARCHAR",
+                "ALTER TABLE users ADD COLUMN telegram_bot_token VARCHAR",
+                "ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN enable_telegram BOOLEAN DEFAULT 0",
+                "ALTER TABLE user_settings ADD COLUMN broker_gateway VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN broker_api_key VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN broker_api_secret VARCHAR"
+            ]
+            for sql in migrations:
+                try:
+                    await conn.execute(text(sql))
+                except Exception:
+                    pass # Already exists
     except Exception as e:
         print(f"Database initialization failed: {e}")
         
