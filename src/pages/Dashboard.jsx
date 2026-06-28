@@ -1684,7 +1684,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="md:ml-64 flex flex-col h-screen overflow-hidden">
+      <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden">
         {/* Top Header Bar */}
         <header className={`glass-nav h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
           <div className="flex items-center space-x-8">
