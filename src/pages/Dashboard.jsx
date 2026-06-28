@@ -136,7 +136,7 @@ export default function Dashboard() {
   const realAccountPnlRef = useRef(realAccountPnl)
   const activeModeRef = useRef(activeMode)
 
-  const tradeInvestmentRef = useRef(tradeInvestment)
+  const tradeInvestmentRef = useRef(null)
   const autoTradeModeRef = useRef(autoTradeMode)
   const enabledAutoTradeMarketsRef = useRef(enabledAutoTradeMarkets)
   const profitTargetRef = useRef(profitTarget)
