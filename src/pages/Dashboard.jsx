@@ -2,14 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 
-const getCurrencySymbol = (sym) => {
-  if (!sym) return '₹'
-  const upper = sym.toUpperCase()
-  if (upper.includes('USDT') || upper.includes('BTC') || upper.includes('ETH') || upper.includes('SOL') || upper.includes('ADA') || upper.includes('USD')) {
-    return '$'
-  }
-  return '₹'
-}
+
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -153,6 +146,16 @@ export default function Dashboard() {
   const [testNotifStatus, setTestNotifStatus] = useState('')
 
   // Dynamic currency helpers
+  const getCurrencySymbol = (sym) => {
+    const target = sym || selectedSymbol
+    if (!target) return '₹'
+    const upper = target.toUpperCase()
+    if (upper.includes('USDT') || upper.includes('BTC') || upper.includes('ETH') || upper.includes('SOL') || upper.includes('ADA') || upper.includes('USD')) {
+      return '$'
+    }
+    return '₹'
+  }
+
   const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
   const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
   const setTradeInvestment = (val) => {
