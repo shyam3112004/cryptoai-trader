@@ -2,6 +2,15 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 
+const getCurrencySymbol = (sym) => {
+  if (!sym) return '₹'
+  const upper = sym.toUpperCase()
+  if (upper.includes('USDT') || upper.includes('BTC') || upper.includes('ETH') || upper.includes('SOL') || upper.includes('ADA') || upper.includes('USD')) {
+    return '$'
+  }
+  return '₹'
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, token, logout, setMode, updateUser } = useAuthStore()
@@ -941,7 +950,8 @@ export default function Dashboard() {
 
                   // Add to trade history logs
                   const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
-                  const formatPnl = finalPnl >= 0 ? `+₹${finalPnl.toFixed(2)}` : `-₹${Math.abs(finalPnl).toFixed(2)}`
+                  const symb = getCurrencySymbol(selectedSymbolRef.current)
+                  const formatPnl = finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`
                   const returnPctStr = pnlPctVal >= 0 ? `+${pnlPctVal.toFixed(2)}%` : `${pnlPctVal.toFixed(2)}%`
 
                   setTradeHistory(prev => [
@@ -950,7 +960,7 @@ export default function Dashboard() {
                       date: formattedDate,
                       pair: selectedSymbolRef.current,
                       type: isShort ? 'SHORT' : 'LONG',
-                      investment: `₹${tradeInvestmentRef.current.toLocaleString()}`,
+                      investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
                       leverage: '10X',
                       profit: formatPnl,
                       returnPct: returnPctStr,
@@ -967,7 +977,7 @@ export default function Dashboard() {
                       id: Date.now(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                       action: `CLOSE ${selectedSymbolRef.current}`,
-                      qty: `10X @ $${displayExitPrice}`,
+                      qty: `10X @ ${symb}${displayExitPrice}`,
                       pnl: formatPnl,
                       type: finalPnl >= 0 ? 'buy' : 'sell'
                     },
@@ -975,13 +985,14 @@ export default function Dashboard() {
                   ])
                   triggerDesktopNotification(
                     finalPnl >= 0 ? `🎯 TARGET HIT: ${selectedSymbolRef.current}` : `⚠️ STOP LOSS: ${selectedSymbolRef.current}`,
-                    `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ₹${exitPriceVal.toLocaleString()}`
+                    `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${exitPriceVal.toLocaleString()}`
                   )
                 } else if (isBuy) {
                   // Open new position
                   const entryVal = payload.entry_price || lastCandle?.close || 0
                   costBasisRef.current = entryVal
                   const displayEntryPrice = typeof entryVal === 'number' ? entryVal.toLocaleString() : entryVal
+                  const symb = getCurrencySymbol(selectedSymbolRef.current)
                   
                   // Add to execution logs card
                   setLogs(prev => [
@@ -989,7 +1000,7 @@ export default function Dashboard() {
                       id: Date.now(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                       action: `OPEN LONG ${selectedSymbolRef.current}`,
-                      qty: `10X @ $${displayEntryPrice}`,
+                      qty: `10X @ ${symb}${displayEntryPrice}`,
                       pnl: '0.00',
                       type: 'buy'
                     },
@@ -997,7 +1008,7 @@ export default function Dashboard() {
                   ])
                   triggerDesktopNotification(
                     `🟢 BUY EXECUTED: ${selectedSymbolRef.current}`,
-                    `10X Long entry position opened at ₹${entryVal.toLocaleString()}`
+                    `10X Long entry position opened at ${symb}${entryVal.toLocaleString()}`
                   )
                 }
               }
@@ -1147,12 +1158,13 @@ export default function Dashboard() {
                 ])
 
                 // Add to logs
+                const symb = getCurrencySymbol(currentSym)
                 setLogs(prev => [
                   {
                     id: Date.now(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                     action: `OPEN LONG ${currentSym}`,
-                    qty: `10X @ $${newClose.toLocaleString()}`,
+                    qty: `10X @ ${symb}${newClose.toLocaleString()}`,
                     pnl: '0.00',
                     type: 'buy'
                   },
@@ -1160,7 +1172,7 @@ export default function Dashboard() {
                 ])
                 triggerDesktopNotification(
                   `🟢 BUY EXECUTED: ${currentSym}`,
-                  `10X Long entry position opened at ₹${newClose.toLocaleString()}`
+                  `10X Long entry position opened at ${symb}${newClose.toLocaleString()}`
                 )
               }
             } else {
@@ -1232,14 +1244,15 @@ export default function Dashboard() {
                   }
                 ])
 
-                // Add to logs
-                const formatPnl = finalPnl >= 0 ? `+₹${finalPnl.toFixed(2)}` : `-₹${Math.abs(finalPnl).toFixed(2)}`
+                 // Add to logs
+                const symb = getCurrencySymbol(currentSym)
+                const formatPnl = finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`
                 setLogs(prev => [
                   {
                     id: Date.now(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                     action: `CLOSE ${currentSym}`,
-                    qty: `10X @ $${newClose.toLocaleString()}`,
+                    qty: `10X @ ${symb}${newClose.toLocaleString()}`,
                     pnl: formatPnl,
                     type: finalPnl >= 0 ? 'buy' : 'sell'
                   },
@@ -1255,7 +1268,7 @@ export default function Dashboard() {
                     date: formattedDate,
                     pair: currentSym,
                     type: 'LONG',
-                    investment: `₹${tradeInvestmentRef.current.toLocaleString()}`,
+                    investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
                     leverage: '10X',
                     profit: formatPnl,
                     returnPct: returnPctStr,
@@ -1265,7 +1278,7 @@ export default function Dashboard() {
                 ])
                 triggerDesktopNotification(
                   finalPnl >= 0 ? `🎯 TARGET HIT: ${currentSym}` : `⚠️ STOP LOSS: ${currentSym}`,
-                  `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ₹${newClose.toLocaleString()}`
+                  `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${newClose.toLocaleString()}`
                 )
 
                 // Close the position
@@ -1629,7 +1642,7 @@ export default function Dashboard() {
       trade.date,
       trade.pair,
       trade.type,
-      trade.investment || `$${tradeInvestment.toLocaleString()}`,
+      trade.investment || `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`,
       trade.leverage,
       trade.profit,
       trade.returnPct,
@@ -1824,7 +1837,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center px-2 py-0.5 md:px-2.5 md:py-1 bg-[#111827] border border-[#1E2D4A] rounded-full text-[10px] md:text-xs font-mono-data text-white">
               <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold hidden sm:inline">BAL:</span>
-              <span className="font-bold text-cyan-400">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0 })}</span>
+              <span className="font-bold text-cyan-400">{getCurrencySymbol()}{balance.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 0 })}</span>
             </div>
           </div>
           
@@ -2038,7 +2051,7 @@ export default function Dashboard() {
                     <div className="border-t border-[#1E2D4A]/50 pt-3">
                       <div className="flex justify-between mb-1.5">
                         <span className="text-slate-400">Trade Size (Investment)</span>
-                        <span className="text-cyan-400 font-bold">₹{tradeInvestment.toLocaleString()}</span>
+                        <span className="text-cyan-400 font-bold">{getCurrencySymbol()}{tradeInvestment.toLocaleString()}</span>
                       </div>
                       <input 
                         type="range" 
@@ -2059,7 +2072,7 @@ export default function Dashboard() {
                               tradeInvestment === amt ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-[#162035] border-[#1E2D4A] text-slate-400 hover:text-white'
                             }`}
                           >
-                            ₹{amt}
+                            {getCurrencySymbol()}{amt}
                           </button>
                         ))}
                       </div>
@@ -2438,7 +2451,7 @@ export default function Dashboard() {
                     <button
                       onClick={resetWalletBalance}
                       className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center space-x-1"
-                      title="Reset Wallet Balance back to starting ₹10,000.00"
+                      title={`Reset Wallet Balance back to starting ${getCurrencySymbol()}${10000.00.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN')}`}
                     >
                       <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                       <span>Reset</span>
@@ -2447,7 +2460,7 @@ export default function Dashboard() {
                   <div>
                     <p className="text-[10px] text-slate-500">Total Balance</p>
                     <h2 className={`text-2xl md:text-3xl font-mono-data font-bold text-white tracking-tight ${isPriceFlashing ? 'price-flash' : ''}`}>
-                      ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {getCurrencySymbol()}{balance.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
                     </h2>
                   </div>
                   <div className="my-3 grid grid-cols-2 gap-2">
@@ -2455,7 +2468,7 @@ export default function Dashboard() {
                       <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-bold mb-0.5">Today P&L</p>
                       <div className="flex items-center space-x-1">
                         <span className={`text-xs md:text-sm font-mono-data ${todayPnl >= 0 ? 'text-[#00E676]' : 'text-[#FF3D57]'}`}>
-                          {todayPnl >= 0 ? `+₹${todayPnl.toFixed(2)}` : `-₹${Math.abs(todayPnl).toFixed(2)}`}
+                          {todayPnl >= 0 ? '+' : '-'}{getCurrencySymbol()}{Math.abs(todayPnl).toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -2953,7 +2966,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold">Realized Net P&L Amount</p>
                       <p className={`text-xl font-mono-data font-bold mt-1 ${totalLedgerPnl >= 0 ? 'text-[#00E676]' : 'text-red-500'}`}>
-                        {totalLedgerPnl >= 0 ? `+₹${totalLedgerPnl.toFixed(2)}` : `-₹${Math.abs(totalLedgerPnl).toFixed(2)}`}
+                        {totalLedgerPnl >= 0 ? '+' : '-'}{getCurrencySymbol()}{Math.abs(totalLedgerPnl).toFixed(2)}
                       </p>
                     </div>
                     <div className={`p-2.5 rounded-lg ${totalLedgerPnl >= 0 ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'}`}>
@@ -2965,7 +2978,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold">Total Capital Invested</p>
                       <p className="text-xl font-mono-data font-bold text-cyan-400 mt-1">
-                        ₹{totalLedgerVolume.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {getCurrencySymbol()}{totalLedgerVolume.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400">
@@ -3065,10 +3078,10 @@ export default function Dashboard() {
                                     {trade.type}
                                   </span>
                                 </td>
-                                <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment.replace('$', '₹') : `₹${tradeInvestment.toLocaleString()}`}</td>
+                                <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</td>
                                 <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
                                 <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                  {trade.profit ? trade.profit.replace('$', '₹') : trade.profit}
+                                  {trade.profit ? trade.profit : '0.00'}
                                 </td>
                                 <td className={`py-4 px-6 font-mono-data ${trade.returnPct.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
                                   {trade.returnPct}
@@ -3576,10 +3589,10 @@ export default function Dashboard() {
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
                     <span className="text-slate-300 font-bold">Trade Size (Per Position)</span>
-                    <span className="text-cyan-400 font-bold font-mono-data">₹{tradeInvestment}</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{getCurrencySymbol()}{tradeInvestment}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-slate-500 font-bold">₹</span>
+                    <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
                     <input 
                       type="number"
                       min="10"
@@ -3600,7 +3613,7 @@ export default function Dashboard() {
                             : 'bg-[#162035] text-slate-300 border-[#1E2D4A] hover:border-cyan-500/50'
                         }`}
                       >
-                        ₹{amt}
+                        {getCurrencySymbol()}{amt}
                       </button>
                     ))}
                   </div>
