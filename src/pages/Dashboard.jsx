@@ -1920,6 +1920,52 @@ export default function Dashboard() {
                   </div>
                   
                   <div className="space-y-4 text-xs">
+                    {/* Auto-Trade Switch */}
+                    <div className="flex items-center justify-between border-b border-[#1E2D4A]/50 pb-3">
+                      <div>
+                        <span className="text-slate-200 font-bold block">Auto-Trade System</span>
+                        <p className="text-[9px] text-slate-500 mt-0.5">Toggle automated bot execution on or off.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={autoTrade}
+                          onChange={(e) => setAutoTrade(e.target.checked)}
+                          className="sr-only peer"
+                          disabled={isEmergencyStopped}
+                        />
+                        <div className="w-12 h-6 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                        <div className="absolute -inset-2 rounded-full opacity-0 group-hover:opacity-100 peer-checked:bg-cyan-500/10 transition-all"></div>
+                      </label>
+                    </div>
+
+                    {/* Custom Demo Balance (Only visible in Demo mode) */}
+                    {activeMode === 'demo' && (
+                      <div className="border-b border-[#1E2D4A]/50 pb-3">
+                        <div className="flex justify-between mb-1.5">
+                          <div>
+                            <span className="text-slate-200 font-bold block">Edit Demo Balance</span>
+                            <p className="text-[9px] text-slate-500 mt-0.5">Set a custom starting capital for testing.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
+                          <input 
+                            type="number"
+                            min="1"
+                            value={realizedBalance}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0
+                              setRealizedBalance(val)
+                              setBalance(val)
+                              localStorage.setItem('realizedBalance', val.toString())
+                            }}
+                            className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Max Open Positions */}
                     <div>
                       <div className="flex justify-between mb-1.5">
@@ -3485,6 +3531,52 @@ export default function Dashboard() {
               </div>
 
               <div className="space-y-5 text-xs">
+                {/* Auto-Trade Switch */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A] flex justify-between items-center">
+                  <div>
+                    <span className="text-slate-300 font-bold block">Auto-Trade System</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Toggle automated bot execution on or off.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={autoTrade}
+                      onChange={(e) => setAutoTrade(e.target.checked)}
+                      className="sr-only peer"
+                      disabled={isEmergencyStopped}
+                    />
+                    <div className="w-12 h-6 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                    <div className="absolute -inset-2 rounded-full opacity-0 group-hover:opacity-100 peer-checked:bg-cyan-500/10 transition-all"></div>
+                  </label>
+                </div>
+
+                {/* Custom Demo Balance (Only visible in Demo mode) */}
+                {activeMode === 'demo' && (
+                  <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                    <div className="flex justify-between mb-2">
+                      <div>
+                        <span className="text-slate-300 font-bold block">Edit Demo Balance</span>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Set a custom starting capital for testing.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
+                      <input 
+                        type="number"
+                        min="1"
+                        value={realizedBalance}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0
+                          setRealizedBalance(val)
+                          setBalance(val)
+                          localStorage.setItem('realizedBalance', val.toString())
+                        }}
+                        className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Max Open Positions */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
