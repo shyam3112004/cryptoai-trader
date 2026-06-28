@@ -1690,17 +1690,18 @@ export default function Dashboard() {
       {/* Main Content Pane */}
       <main className="md:ml-64 flex flex-col min-h-screen md:h-screen md:overflow-hidden">
         {/* Top Header Bar */}
-        <header className={`glass-nav h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
-          <div className="flex items-center space-x-8">
-            <h1 className="text-xl font-headline font-bold flex items-center">
-              <span className="text-cyan-400 mr-2 text-2xl">◈</span>
-              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">CryptoAI Trader</span>
+        <header className={`glass-nav h-16 px-2 md:px-8 flex items-center justify-between sticky top-0 z-40 waterfall-reveal ${isMounted ? 'active' : ''}`}>
+          <div className="flex items-center space-x-2 md:space-x-8">
+            <h1 className="text-lg md:text-xl font-headline font-bold flex items-center">
+              <span className="text-cyan-400 mr-1.5 md:mr-2 text-xl md:text-2xl">◈</span>
+              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent hidden sm:inline-block">CryptoAI Trader</span>
+              <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent sm:hidden text-sm">CryptoAI</span>
             </h1>
-            <div className="mode-pill flex items-center p-1">
+            <div className="mode-pill flex items-center p-0.5 md:p-1">
               <button
                 id="btn-demo"
                 onClick={() => handleModeSwitch('demo')}
-                className={`px-6 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
                   activeMode === 'demo' ? 'active-demo' : 'text-slate-500 hover:text-white'
                 }`}
               >
@@ -1709,7 +1710,7 @@ export default function Dashboard() {
               <button
                 id="btn-real"
                 onClick={() => handleModeSwitch('real')}
-                className={`px-6 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1 md:px-6 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold transition-all cursor-pointer ${
                   activeMode === 'real'
                     ? 'bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.4)]'
                     : 'text-slate-500 hover:text-white'
@@ -1720,8 +1721,8 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <div className="flex items-center space-x-6">
-            <div className="flex space-x-4 border-r border-[#1E2D4A] pr-6 relative">
+          <div className="flex items-center space-x-1 md:space-x-6">
+            <div className="flex items-center space-x-1 md:space-x-4 pr-1 md:pr-6 md:border-r border-[#1E2D4A] relative">
               {/* Notifications Popover */}
               <div className="relative" ref={notificationsRef}>
                 <button 
@@ -1781,7 +1782,7 @@ export default function Dashboard() {
                 </button>
                 
                 {/* Popover Card */}
-                <div className={`absolute right-0 mt-2 w-96 max-h-[85vh] overflow-y-auto rounded-xl border border-[#1E2D4A] bg-[#0F1629] p-4 shadow-2xl transition-all duration-200 z-50 ${
+                <div className={`absolute right-[-10px] sm:right-0 mt-2 w-80 md:w-96 max-h-[85vh] overflow-y-auto rounded-xl border border-[#1E2D4A] bg-[#0F1629] p-4 shadow-2xl transition-all duration-200 z-50 ${
                   isSettingsOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
                 }`}>
                   <div className="mb-4 border-b border-[#1E2D4A] pb-2">
@@ -2548,27 +2549,27 @@ export default function Dashboard() {
 
           {/* TAB 3: TRADE HISTORY LOG */}
           {currentTab === 'history' && (
-            <div className="premium-card rounded-xl p-6 overflow-hidden">
-                <div className="flex justify-between items-center mb-6">
+            <div className="premium-card rounded-xl p-4 md:p-6 overflow-hidden">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <div>
                     <h2 className="text-xl font-headline font-bold text-white">Realized Trade Ledger</h2>
                     <p className="text-xs text-slate-400 mt-1">Audit log of all processed auto-buys and auto-sells.</p>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2 md:space-x-3 w-full sm:w-auto justify-end">
                     <button
                       onClick={clearTradeHistory}
-                      className="flex items-center space-x-1.5 py-2 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase tracking-wider text-[11px] rounded-lg transition-colors cursor-pointer"
+                      className="flex items-center space-x-1 py-1.5 px-2.5 md:py-2 md:px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase tracking-wider text-[10px] md:text-[11px] rounded-lg transition-colors cursor-pointer"
                       title="Clear all trade history logs"
                     >
-                      <span className="material-symbols-outlined text-sm font-bold">delete</span>
+                      <span className="material-symbols-outlined text-xs md:text-sm font-bold">delete</span>
                       <span>Clear History</span>
                     </button>
                     <button
                       onClick={exportHistoryToCSV}
-                      className="flex items-center space-x-2 py-2 px-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold uppercase tracking-wider text-[11px] rounded-lg transition-colors cursor-pointer"
+                      className="flex items-center space-x-1.5 py-1.5 px-3 md:py-2 md:px-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold uppercase tracking-wider text-[10px] md:text-[11px] rounded-lg transition-colors cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-sm font-bold">download</span>
-                      <span>Export CSV (Excel)</span>
+                      <span className="material-symbols-outlined text-xs md:text-sm font-bold">download</span>
+                      <span>Export CSV</span>
                     </button>
                   </div>
                 </div>
@@ -2612,7 +2613,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto w-full max-w-full pb-4">
                 {tradeHistory.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-[#1E2D4A] rounded-xl">
                     <span className="material-symbols-outlined text-slate-600 text-4xl mb-2">history</span>
@@ -2621,7 +2622,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[750px]">
                       <thead>
                         <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                           <th className="py-4 px-6">Timestamp</th>
