@@ -176,6 +176,7 @@ export default function Dashboard() {
   const maxOpenPositionsRef = useRef(maxOpenPositions)
   const stopLossLimitRef = useRef(stopLossLimit)
   const tradePacingRef = useRef(tradePacing)
+  const autoTradeRef = useRef(autoTrade)
 
   useEffect(() => {
     localStorage.setItem('maxOpenPositions', maxOpenPositions)
