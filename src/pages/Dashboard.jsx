@@ -2676,7 +2676,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto w-full max-w-full pb-4">
                 {tradeHistory.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-[#1E2D4A] rounded-xl">
                     <span className="material-symbols-outlined text-slate-600 text-4xl mb-2">history</span>
@@ -2685,104 +2684,104 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <table className="w-full text-left border-collapse min-w-[750px]">
-                      <thead>
-                        <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                          <th className="py-4 px-6">Timestamp</th>
-                          <th className="py-4 px-6">Asset Pair</th>
-                          <th className="py-4 px-6">Position</th>
-                          <th className="py-4 px-6">Investment</th>
-                          <th className="py-4 px-6">Leverage</th>
-                          <th className="py-4 px-6">Net Profit</th>
-                          <th className="py-4 px-6">Return</th>
-                          <th className="py-4 px-6">Trigger Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
-                        {(() => {
-                          const itemsPerPage = 10
-                          const currentPageHistory = tradeHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage)
-                          return currentPageHistory.map((trade) => (
-                            <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
-                              <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
-                              <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
-                              <td className="py-4 px-6">
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                  trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
-                                }`}>
-                                  {trade.type}
-                                </span>
-                              </td>
-                              <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment.replace('$', '₹') : `₹${tradeInvestment.toLocaleString()}`}</td>
-                              <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
-                              <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                {trade.profit ? trade.profit.replace('$', '₹') : trade.profit}
-                              </td>
-                              <td className={`py-4 px-6 font-mono-data ${trade.returnPct.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                {trade.returnPct}
-                              </td>
-                              <td className="py-4 px-6">
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                  trade.status === 'TARGET HIT' 
-                                    ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
-                                    : trade.status === 'STOP LOSS'
-                                    ? 'bg-red-500/10 text-red-500 border border-red-500/30'
-                                    : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-                                }`}>
-                                  {trade.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* Pagination Controls */}
-                  {tradeHistory.length > 0 && (() => {
-                    const itemsPerPage = 10
-                    const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
-                    return (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-2 sm:px-4 border-t border-[#1E2D4A] text-xs text-slate-400 mt-2">
-                        <div className="text-[11px] sm:text-xs text-center sm:text-left">
-                          Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
-                        </div>
-                        <div className="flex items-center space-x-1.5 sm:space-x-2">
-                          <button
-                            disabled={historyPage === 1}
-                            onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
-                            className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                          >
-                            Prev
-                          </button>
-                          {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(p => (
+                    <div className="overflow-x-auto w-full max-w-full pb-4">
+                      <table className="w-full text-left border-collapse min-w-[750px]">
+                        <thead>
+                          <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                            <th className="py-4 px-6">Timestamp</th>
+                            <th className="py-4 px-6">Asset Pair</th>
+                            <th className="py-4 px-6">Position</th>
+                            <th className="py-4 px-6">Investment</th>
+                            <th className="py-4 px-6">Leverage</th>
+                            <th className="py-4 px-6">Net Profit</th>
+                            <th className="py-4 px-6">Return</th>
+                            <th className="py-4 px-6">Trigger Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
+                          {(() => {
+                            const itemsPerPage = 10
+                            const currentPageHistory = tradeHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage)
+                            return currentPageHistory.map((trade) => (
+                              <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
+                                <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
+                                <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
+                                <td className="py-4 px-6">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                    trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
+                                  }`}>
+                                    {trade.type}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment.replace('$', '₹') : `₹${tradeInvestment.toLocaleString()}`}</td>
+                                <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
+                                <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                  {trade.profit ? trade.profit.replace('$', '₹') : trade.profit}
+                                </td>
+                                <td className={`py-4 px-6 font-mono-data ${trade.returnPct.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                  {trade.returnPct}
+                                </td>
+                                <td className="py-4 px-6">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                    trade.status === 'TARGET HIT' 
+                                      ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
+                                      : trade.status === 'STOP LOSS'
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/30'
+                                      : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                                  }`}>
+                                    {trade.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Pagination Controls */}
+                    {tradeHistory.length > 0 && (() => {
+                      const itemsPerPage = 10
+                      const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
+                      return (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-2 sm:px-4 border-t border-[#1E2D4A] text-xs text-slate-400 mt-2">
+                          <div className="text-[11px] sm:text-xs text-center sm:text-left">
+                            Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
+                          </div>
+                          <div className="flex items-center space-x-1.5 sm:space-x-2">
                             <button
-                              key={p}
-                              onClick={() => setHistoryPage(p)}
-                              className={`px-2.5 py-1 text-xs rounded border font-bold font-mono-data cursor-pointer transition-all ${
-                                historyPage === p 
-                                  ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
-                                  : 'bg-[#162035] border-[#1E2D4A] text-slate-300 hover:bg-cyan-500/20'
-                              }`}
+                              disabled={historyPage === 1}
+                              onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
                             >
-                              {p}
+                              Prev
                             </button>
-                          ))}
-                          <button
-                            disabled={historyPage === totalHistoryPages}
-                            onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
-                            className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                          >
-                            Next
-                          </button>
+                            {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(p => (
+                              <button
+                                key={p}
+                                onClick={() => setHistoryPage(p)}
+                                className={`px-2.5 py-1 text-xs rounded border font-bold font-mono-data cursor-pointer transition-all ${
+                                  historyPage === p 
+                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
+                                    : 'bg-[#162035] border-[#1E2D4A] text-slate-300 hover:bg-cyan-500/20'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                            <button
+                              disabled={historyPage === totalHistoryPages}
+                              onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
+                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
+                            >
+                              Next
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })()}
-                </>
-              )}
-            </div>
-            </div>
+                      )
+                    })()}
+                  </>
+                )}
+              </div>
           )}
 
           {/* TAB 4: LIVE AI SIGNALS */}
