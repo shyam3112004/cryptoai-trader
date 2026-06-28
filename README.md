@@ -2,7 +2,7 @@
 title: CryptoAI Trader Engine
 emoji: 📈
 colorFrom: green
-colorTo: black
+colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
