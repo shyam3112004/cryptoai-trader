@@ -417,6 +417,8 @@ async def notify_trade(request: TradeNotifyRequest):
                 loss=request.pnl,
                 loss_pct=request.return_pct,
                 mode=request.mode
+            )
+            
     return {"status": "success", "whatsapp": whatsapp_res, "telegram": telegram_res}
 
 class ExecuteOrderRequest(BaseModel):
