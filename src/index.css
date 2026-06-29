@@ -71,14 +71,19 @@
   --accent-amber: #FFB300;
 }
 
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 body {
   background-color: var(--bg-color);
   background-image: radial-gradient(circle, #1E2D4A 1px, transparent 1px);
   background-size: 24px 24px;
   color: #dde3e8;
   font-family: 'Inter', sans-serif;
-  overflow-x: hidden;
-  margin: 0;
 }
 
 /* Animations & Transitions */

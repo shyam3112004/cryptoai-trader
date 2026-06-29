@@ -2455,7 +2455,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Pages Switcher */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32">
+        <div className="flex-1 h-[calc(100dvh-4rem)] md:h-[calc(100vh-4rem)] overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-36 md:pb-32">
           
           {/* TAB 1: MAIN DASHBOARD */}
           {currentTab === 'dashboard' && (
