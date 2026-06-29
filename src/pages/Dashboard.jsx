@@ -2423,9 +2423,26 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div onClick={logout} className="flex items-center space-x-3 group cursor-pointer" title="Click to log out">
-              <span className="text-xs font-mono-data text-slate-400 group-hover:text-cyan-400 transition-colors">LOGOUT</span>
-              <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-[10px] font-bold text-cyan-400 group-hover:ring-2 ring-cyan-500/30">
+            <div className="flex items-center space-x-3 group">
+              <button 
+                onClick={logout} 
+                className="text-xs font-mono-data text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer" 
+                title="Click to log out"
+              >
+                LOGOUT
+              </button>
+              <div 
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setIsSettingsOpen(true);
+                  } else {
+                    setIsSettingsOpen(prev => !prev);
+                    setIsNotificationsOpen(false);
+                  }
+                }}
+                className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-[10px] font-bold text-cyan-400 cursor-pointer hover:ring-2 ring-cyan-500/30"
+                title="Open Settings"
+              >
                 {user?.name ? user.name.slice(0, 2).toUpperCase() : 'TE'}
               </div>
             </div>
