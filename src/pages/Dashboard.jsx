@@ -15,7 +15,7 @@ export default function Dashboard() {
     return saved ? saved : '1.5X'
   })
   const [timeframe, setTimeframe] = useState('15m')
-  const [autoTrade, setAutoTrade] = useState(true)
+  const [autoTrade, setAutoTrade] = useState(false)
   const [isMarketClosed, setIsMarketClosed] = useState(false)
   
   const isStockMarketOpenFrontend = () => {
