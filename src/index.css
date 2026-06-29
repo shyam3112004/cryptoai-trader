@@ -72,10 +72,23 @@
 }
 
 html, body, #root {
-  height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+}
+
+/* Mobile: allow natural document scrolling for WebView touch compatibility */
+html, body, #root {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Desktop: lock overflow on html/body since the inner pane handles its own scroll */
+@media (min-width: 768px) {
+  html, body, #root {
+    overflow: hidden;
+  }
 }
 
 body {
