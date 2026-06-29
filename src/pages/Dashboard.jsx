@@ -2388,6 +2388,7 @@ export default function Dashboard() {
                             <option value="Angel One SmartAPI (100% FREE Lifetime Access)">Angel One SmartAPI (100% FREE Lifetime)</option>
                             <option value="Shoonya by Finvasia (100% FREE & Zero Brokerage)">Shoonya Finvasia (100% FREE & Zero Commission)</option>
                             <option value="Upstox v2 API (Free Developer Tier)">Upstox v2 API (Free Tier)</option>
+                            <option value="Alpaca Trading API (US Stocks & Crypto)">Alpaca Trading API (US Stocks & Crypto)</option>
                             <option value="Zerodha Kite Connect API">Zerodha Kite Connect (Paid Credits)</option>
                           </select>
                         </div>
@@ -4118,6 +4119,7 @@ export default function Dashboard() {
                         <option value="Angel One SmartAPI (100% FREE Lifetime Access)">Angel One SmartAPI (100% FREE Lifetime)</option>
                         <option value="Shoonya by Finvasia (100% FREE & Zero Brokerage)">Shoonya Finvasia (100% FREE & Zero Commission)</option>
                         <option value="Upstox v2 API (Free Developer Tier)">Upstox v2 API (Free Tier)</option>
+                        <option value="Alpaca Trading API (US Stocks & Crypto)">Alpaca Trading API (US Stocks & Crypto)</option>
                         <option value="Zerodha Kite Connect API">Zerodha Kite Connect (Paid Credits)</option>
                       </select>
                     </div>
