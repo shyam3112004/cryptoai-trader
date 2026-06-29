@@ -1241,6 +1241,13 @@ export default function Dashboard() {
                   `🟢 BUY EXECUTED: ${currentSym}`,
                   `10X Long entry position opened at ${symb}${newClose.toLocaleString()}`
                 )
+                if (activeModeRef.current === 'real') {
+                  fetch('/api/v1/signals/execute-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: currentSym, side: 'buy', qty: 1.0 })
+                  }).catch(e => console.error('Execute buy order error:', e))
+                }
               }
             } else {
               // Position is open, calculate active unrealized P&L
@@ -1347,6 +1354,13 @@ export default function Dashboard() {
                   finalPnl >= 0 ? `🎯 TARGET HIT: ${currentSym}` : `⚠️ STOP LOSS: ${currentSym}`,
                   `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${newClose.toLocaleString()}`
                 )
+                if (activeModeRef.current === 'real') {
+                  fetch('/api/v1/signals/execute-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: currentSym, side: 'sell', qty: 1.0 })
+                  }).catch(e => console.error('Execute sell order error:', e))
+                }
 
                 // Close the position
                 costBasisRef.current = null

@@ -417,9 +417,53 @@ async def notify_trade(request: TradeNotifyRequest):
                 loss=request.pnl,
                 loss_pct=request.return_pct,
                 mode=request.mode
-            )
-            
     return {"status": "success", "whatsapp": whatsapp_res, "telegram": telegram_res}
+
+class ExecuteOrderRequest(BaseModel):
+    symbol: str
+    side: str
+    qty: float = 1.0
+
+@router.post("/execute-order")
+async def execute_order(req: ExecuteOrderRequest):
+    import httpx
+    user_info = await query_user_info()
+    api_key = user_info.get("api_key")
+    api_secret = user_info.get("api_secret")
+    gateway = str(user_info.get("gateway") or "")
+    
+    if not api_key or not api_secret:
+        return {"status": "skipped", "reason": "No API credentials configured"}
+        
+    if "alpaca" in gateway.lower() or (api_key and api_key.startswith("PK")):
+        base_url = "https://paper-api.alpaca.markets" if (api_key and api_key.startswith("PK")) else "https://api.alpaca.markets"
+        headers = {
+            "APCA-API-KEY-ID": api_key,
+            "APCA-API-SECRET-KEY": api_secret,
+            "Content-Type": "application/json"
+        }
+        clean_sym = req.symbol.split("/")[0].upper()
+        if clean_sym in ["BTC", "ETH", "SOL", "ADA"]:
+            clean_sym = f"{clean_sym}/USD"
+            
+        payload = {
+            "symbol": clean_sym,
+            "qty": str(req.qty),
+            "side": req.side.lower(),
+            "type": "market",
+            "time_in_force": "gtc"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(f"{base_url}/v2/orders", json=payload, headers=headers)
+                res_json = resp.json()
+                print(f"Alpaca Order Execution Response: {res_json}")
+                return {"status": "success", "broker": "Alpaca", "order": res_json}
+        except Exception as e:
+            print(f"Alpaca Order Execution Error: {e}")
+            return {"status": "error", "error": str(e)}
+            
+    return {"status": "simulated", "gateway": gateway}
 
 async def query_user_info() -> dict:
     try:
