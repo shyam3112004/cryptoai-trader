@@ -3100,47 +3100,6 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    {/* Top Pagination Controls */}
-                    {tradeHistory.length > 0 && (() => {
-                      const itemsPerPage = 10
-                      const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
-                      return (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 px-2 sm:px-4 border-b border-[#1E2D4A] text-xs text-slate-400 mb-3">
-                          <div className="text-[11px] sm:text-xs text-center sm:text-left font-mono-data">
-                            Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
-                          </div>
-                          <div className="flex items-center space-x-1.5 sm:space-x-2">
-                            <button
-                              disabled={historyPage === 1}
-                              onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
-                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                            >
-                              Prev
-                            </button>
-                            {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(p => (
-                              <button
-                                key={p}
-                                onClick={() => setHistoryPage(p)}
-                                className={`px-2.5 py-1 text-xs rounded border font-bold font-mono-data cursor-pointer transition-all ${
-                                  historyPage === p 
-                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
-                                    : 'bg-[#162035] border-[#1E2D4A] text-slate-300 hover:bg-cyan-500/20'
-                                }`}
-                              >
-                                {p}
-                              </button>
-                            ))}
-                            <button
-                              disabled={historyPage === totalHistoryPages}
-                              onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
-                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })()}
 
                     {/* Desktop View: Table Layout */}
                     <div className="hidden md:block overflow-x-auto w-full max-w-full pb-4">
@@ -3158,10 +3117,7 @@ export default function Dashboard() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
-                          {(() => {
-                            const itemsPerPage = 10
-                            const currentPageHistory = tradeHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage)
-                            return currentPageHistory.map((trade) => (
+                          {tradeHistory.map((trade) => (
                               <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
                                 <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
                                 <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
@@ -3192,18 +3148,14 @@ export default function Dashboard() {
                                   </span>
                                 </td>
                               </tr>
-                            ))
-                          })()}
+                          ))}
                         </tbody>
                       </table>
                     </div>
 
                     {/* Mobile View: Clean Card List Layout */}
                     <div className="block md:hidden space-y-3 pb-4">
-                      {(() => {
-                        const itemsPerPage = 10
-                        const currentPageHistory = tradeHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage)
-                        return currentPageHistory.map((trade) => (
+                      {tradeHistory.map((trade) => (
                           <div key={trade.id} className="bg-[#111827] p-4 rounded-xl border border-[#1E2D4A] space-y-3">
                             <div className="flex justify-between items-center">
                               <span className="text-[10px] text-slate-500 font-mono-data">{trade.date}</span>
@@ -3232,50 +3184,8 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </div>
-                        ))
-                      })()}
+                        ))}
                     </div>
-                    {/* Bottom Pagination Controls */}
-                    {tradeHistory.length > 0 && (() => {
-                      const itemsPerPage = 10
-                      const totalHistoryPages = Math.max(1, Math.ceil(tradeHistory.length / itemsPerPage))
-                      return (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-2 sm:px-4 border-t border-[#1E2D4A] text-xs text-slate-400 mt-2">
-                          <div className="text-[11px] sm:text-xs text-center sm:text-left font-mono-data">
-                            Showing {tradeHistory.length > 0 ? (historyPage - 1) * itemsPerPage + 1 : 0} to {Math.min(historyPage * itemsPerPage, tradeHistory.length)} of {tradeHistory.length} trades
-                          </div>
-                          <div className="flex items-center space-x-1.5 sm:space-x-2">
-                            <button
-                              disabled={historyPage === 1}
-                              onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
-                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                            >
-                              Prev
-                            </button>
-                            {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(p => (
-                              <button
-                                key={p}
-                                onClick={() => setHistoryPage(p)}
-                                className={`px-2.5 py-1 text-xs rounded border font-bold font-mono-data cursor-pointer transition-all ${
-                                  historyPage === p 
-                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
-                                    : 'bg-[#162035] border-[#1E2D4A] text-slate-300 hover:bg-cyan-500/20'
-                                }`}
-                              >
-                                {p}
-                              </button>
-                            ))}
-                            <button
-                              disabled={historyPage === totalHistoryPages}
-                              onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
-                              className="px-2.5 py-1 text-xs bg-[#162035] border border-[#1E2D4A] rounded hover:bg-cyan-500/20 disabled:opacity-40 cursor-pointer text-slate-300 font-bold"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })()}
                   </>
                 )}
               </div>
