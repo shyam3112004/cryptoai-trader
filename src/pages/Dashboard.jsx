@@ -3142,7 +3142,8 @@ export default function Dashboard() {
                       )
                     })()}
 
-                    <div className="overflow-x-auto w-full max-w-full pb-4">
+                    {/* Desktop View: Table Layout */}
+                    <div className="hidden md:block overflow-x-auto w-full max-w-full pb-4">
                       <table className="w-full text-left border-collapse min-w-[750px]">
                         <thead>
                           <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
@@ -3195,6 +3196,44 @@ export default function Dashboard() {
                           })()}
                         </tbody>
                       </table>
+                    </div>
+
+                    {/* Mobile View: Clean Card List Layout */}
+                    <div className="block md:hidden space-y-3 pb-4">
+                      {(() => {
+                        const itemsPerPage = 10
+                        const currentPageHistory = tradeHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage)
+                        return currentPageHistory.map((trade) => (
+                          <div key={trade.id} className="bg-[#111827] p-4 rounded-xl border border-[#1E2D4A] space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-500 font-mono-data">{trade.date}</span>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
+                              }`}>
+                                {trade.type} {trade.leverage || '10X'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-bold text-xs">{trade.pair}</span>
+                              <span className={`text-xs font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                {trade.profit} ({trade.returnPct})
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] pt-2 border-t border-[#1E2D4A]/50">
+                              <span className="text-slate-500">Capital: <span className="text-cyan-400 font-mono-data font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</span></span>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                trade.status === 'TARGET HIT' 
+                                  ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
+                                  : trade.status === 'STOP LOSS'
+                                  ? 'bg-red-500/10 text-red-500 border border-red-500/30'
+                                  : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                              }`}>
+                                {trade.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      })()}
                     </div>
                     {/* Bottom Pagination Controls */}
                     {tradeHistory.length > 0 && (() => {
