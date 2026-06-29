@@ -2695,7 +2695,7 @@ export default function Dashboard() {
                 ))}
                 
                 {/* Search & Add Market input */}
-                <div ref={marketSearchRef} className="relative flex items-center">
+                <div ref={marketSearchRef} className="relative flex items-center z-50">
                   <div className="flex items-center bg-[#090D1A] border border-[#1E2D4A]/80 hover:border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-slate-300 transition-colors">
                     <span className="material-symbols-outlined text-xs mr-1 text-slate-500">search</span>
                     <input
@@ -2707,34 +2707,74 @@ export default function Dashboard() {
                         setIsSearchDropdownOpen(true)
                       }}
                       onFocus={() => setIsSearchDropdownOpen(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && marketSearchQuery.trim()) {
+                          e.preventDefault()
+                          const q = marketSearchQuery.trim().toUpperCase()
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
+                          if (!visibleMarkets.includes(matched)) {
+                            setVisibleMarkets(prev => [...prev, matched])
+                          }
+                          setSelectedSymbol(matched)
+                          setMarketSearchQuery('')
+                          setIsSearchDropdownOpen(false)
+                        }
+                      }}
                       className="bg-transparent border-none outline-none text-[10px] text-white w-20 focus:w-28 transition-all duration-200 placeholder:text-slate-600 font-bold"
                     />
-                    {marketSearchQuery && (
+                    {marketSearchQuery ? (
                       <button
                         onClick={() => {
+                          const q = marketSearchQuery.trim().toUpperCase()
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
+                          if (!visibleMarkets.includes(matched)) {
+                            setVisibleMarkets(prev => [...prev, matched])
+                          }
+                          setSelectedSymbol(matched)
                           setMarketSearchQuery('')
                           setIsSearchDropdownOpen(false)
                         }}
-                        className="text-slate-500 hover:text-white ml-1 cursor-pointer font-bold"
+                        className="bg-cyan-500 hover:bg-cyan-400 text-black text-[9px] font-bold px-1.5 py-0.5 rounded ml-1 cursor-pointer"
+                        title="Add symbol"
                       >
-                        ×
+                        + ADD
                       </button>
-                    )}
+                    ) : null}
                   </div>
                   
                   {isSearchDropdownOpen && (
-                    <div className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 w-40 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
+                    <div className="absolute left-0 top-full mt-1.5 w-44 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
                       {(() => {
-                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                         const filtered = allAvailableMarkets.filter(
                           (m) =>
                             !visibleMarkets.includes(m) &&
                             m.toLowerCase().includes(marketSearchQuery.toLowerCase())
                         )
                         if (filtered.length === 0) {
+                          if (marketSearchQuery.trim()) {
+                            const customSym = marketSearchQuery.trim().toUpperCase()
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (!visibleMarkets.includes(customSym)) {
+                                    setVisibleMarkets(prev => [...prev, customSym])
+                                  }
+                                  setSelectedSymbol(customSym)
+                                  setMarketSearchQuery('')
+                                  setIsSearchDropdownOpen(false)
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-[10px] text-cyan-400 hover:bg-cyan-500/10 transition-colors font-bold cursor-pointer"
+                              >
+                                + Add "{customSym}"
+                              </button>
+                            )
+                          }
                           return (
                             <div className="px-3 py-1.5 text-[9px] text-slate-500 font-bold">
-                              No markets found
+                              All markets added
                             </div>
                           )
                         }
@@ -2959,7 +2999,7 @@ export default function Dashboard() {
                 ))}
 
                 {/* Search & Add Market input */}
-                <div ref={marketSearchRef2} className="relative flex items-center">
+                <div ref={marketSearchRef2} className="relative flex items-center z-50">
                   <div className="flex items-center bg-[#090D1A] border border-[#1E2D4A]/80 hover:border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-slate-300 transition-colors">
                     <span className="material-symbols-outlined text-xs mr-1 text-slate-500">search</span>
                     <input
@@ -2971,34 +3011,74 @@ export default function Dashboard() {
                         setIsSearchDropdownOpen2(true)
                       }}
                       onFocus={() => setIsSearchDropdownOpen2(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && marketSearchQuery2.trim()) {
+                          e.preventDefault()
+                          const q = marketSearchQuery2.trim().toUpperCase()
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
+                          if (!visibleMarkets.includes(matched)) {
+                            setVisibleMarkets(prev => [...prev, matched])
+                          }
+                          setSelectedSymbol(matched)
+                          setMarketSearchQuery2('')
+                          setIsSearchDropdownOpen2(false)
+                        }
+                      }}
                       className="bg-transparent border-none outline-none text-[10px] text-white w-20 focus:w-28 transition-all duration-200 placeholder:text-slate-600 font-bold"
                     />
-                    {marketSearchQuery2 && (
+                    {marketSearchQuery2 ? (
                       <button
                         onClick={() => {
+                          const q = marketSearchQuery2.trim().toUpperCase()
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
+                          if (!visibleMarkets.includes(matched)) {
+                            setVisibleMarkets(prev => [...prev, matched])
+                          }
+                          setSelectedSymbol(matched)
                           setMarketSearchQuery2('')
                           setIsSearchDropdownOpen2(false)
                         }}
-                        className="text-slate-500 hover:text-white ml-1 cursor-pointer font-bold"
+                        className="bg-cyan-500 hover:bg-cyan-400 text-black text-[9px] font-bold px-1.5 py-0.5 rounded ml-1 cursor-pointer"
+                        title="Add symbol"
                       >
-                        ×
+                        + ADD
                       </button>
-                    )}
+                    ) : null}
                   </div>
                   
                   {isSearchDropdownOpen2 && (
-                    <div className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 w-40 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
+                    <div className="absolute left-0 top-full mt-1.5 w-44 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
                       {(() => {
-                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                         const filtered = allAvailableMarkets.filter(
                           (m) =>
                             !visibleMarkets.includes(m) &&
                             m.toLowerCase().includes(marketSearchQuery2.toLowerCase())
                         )
                         if (filtered.length === 0) {
+                          if (marketSearchQuery2.trim()) {
+                            const customSym = marketSearchQuery2.trim().toUpperCase()
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (!visibleMarkets.includes(customSym)) {
+                                    setVisibleMarkets(prev => [...prev, customSym])
+                                  }
+                                  setSelectedSymbol(customSym)
+                                  setMarketSearchQuery2('')
+                                  setIsSearchDropdownOpen2(false)
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-[10px] text-cyan-400 hover:bg-cyan-500/10 transition-colors font-bold cursor-pointer"
+                              >
+                                + Add "{customSym}"
+                              </button>
+                            )
+                          }
                           return (
                             <div className="px-3 py-1.5 text-[9px] text-slate-500 font-bold">
-                              No markets found
+                              All markets added
                             </div>
                           )
                         }
