@@ -1867,7 +1867,7 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center space-x-1 md:space-x-4">
-            <div className="flex items-center space-x-0.5 md:space-x-3 pr-1 md:pr-4 md:border-r border-[#1E2D4A] relative">
+            <div className="flex items-center space-x-0.5 md:space-x-3 pr-1 md:pr-4 md:border-r border-[#1E2D4A]">
               {/* Notifications Popover */}
               <div className="static md:relative" ref={notificationsRef}>
                 <button 
