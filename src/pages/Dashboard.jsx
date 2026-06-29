@@ -126,6 +126,43 @@ export default function Dashboard() {
   // Chart, symbol selection & emergency stop states
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
   const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false)
+
+  // Dynamic visible markets state for home page selectors
+  const [visibleMarkets, setVisibleMarkets] = useState(() => {
+    try {
+      const saved = localStorage.getItem('visibleMarkets')
+      return saved ? JSON.parse(saved) : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS']
+    } catch (e) {
+      return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS']
+    }
+  })
+  const [marketSearchQuery, setMarketSearchQuery] = useState('')
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false)
+  const marketSearchRef = useRef(null)
+
+  const [marketSearchQuery2, setMarketSearchQuery2] = useState('')
+  const [isSearchDropdownOpen2, setIsSearchDropdownOpen2] = useState(false)
+  const marketSearchRef2 = useRef(null)
+
+  useEffect(() => {
+    localStorage.setItem('visibleMarkets', JSON.stringify(visibleMarkets))
+  }, [visibleMarkets])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (marketSearchRef.current && !marketSearchRef.current.contains(event.target)) {
+        setIsSearchDropdownOpen(false)
+      }
+      if (marketSearchRef2.current && !marketSearchRef2.current.contains(event.target)) {
+        setIsSearchDropdownOpen2(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(40)
   const [panOffset, setPanOffset] = useState(0)
@@ -2622,23 +2659,103 @@ export default function Dashboard() {
 
               {/* Market Ticker Selector Bar */}
               <div className="flex items-center space-x-2 overflow-x-auto py-1 my-2 no-scrollbar">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pr-1 flex items-center">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pr-1 flex items-center whitespace-nowrap">
                   <span className="material-symbols-outlined text-xs mr-1 text-cyan-400">show_chart</span>
                   Markets:
                 </span>
-                {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS'].map((pair) => (
-                  <button
-                    key={pair}
-                    onClick={() => setSelectedSymbol(pair)}
-                    className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap border ${
-                      selectedSymbol === pair
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
-                        : 'bg-[#0A0F1D] border-[#1E2D4A] text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {pair}
-                  </button>
+                {visibleMarkets.map((pair) => (
+                  <div key={pair} className="relative flex items-center">
+                    <button
+                      onClick={() => setSelectedSymbol(pair)}
+                      className={`pl-3 pr-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
+                        selectedSymbol === pair
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                          : 'bg-[#0A0F1D] border-[#1E2D4A] text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>{pair}</span>
+                      {visibleMarkets.length > 1 && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const nextMarkets = visibleMarkets.filter((m) => m !== pair)
+                            setVisibleMarkets(nextMarkets)
+                            if (selectedSymbol === pair) {
+                              setSelectedSymbol(nextMarkets[0])
+                            }
+                          }}
+                          className="text-slate-500 hover:text-red-400 text-[11px] font-bold px-0.5 cursor-pointer"
+                          title="Remove from list"
+                        >
+                          ×
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 ))}
+                
+                {/* Search & Add Market input */}
+                <div ref={marketSearchRef} className="relative flex items-center">
+                  <div className="flex items-center bg-[#090D1A] border border-[#1E2D4A]/80 hover:border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-slate-300 transition-colors">
+                    <span className="material-symbols-outlined text-xs mr-1 text-slate-500">search</span>
+                    <input
+                      type="text"
+                      placeholder="Add market..."
+                      value={marketSearchQuery}
+                      onChange={(e) => {
+                        setMarketSearchQuery(e.target.value)
+                        setIsSearchDropdownOpen(true)
+                      }}
+                      onFocus={() => setIsSearchDropdownOpen(true)}
+                      className="bg-transparent border-none outline-none text-[10px] text-white w-20 focus:w-28 transition-all duration-200 placeholder:text-slate-600 font-bold"
+                    />
+                    {marketSearchQuery && (
+                      <button
+                        onClick={() => {
+                          setMarketSearchQuery('')
+                          setIsSearchDropdownOpen(false)
+                        }}
+                        className="text-slate-500 hover:text-white ml-1 cursor-pointer font-bold"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isSearchDropdownOpen && (
+                    <div className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 w-40 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
+                      {(() => {
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+                        const filtered = allAvailableMarkets.filter(
+                          (m) =>
+                            !visibleMarkets.includes(m) &&
+                            m.toLowerCase().includes(marketSearchQuery.toLowerCase())
+                        )
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="px-3 py-1.5 text-[9px] text-slate-500 font-bold">
+                              No markets found
+                            </div>
+                          )
+                        }
+                        return filtered.map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              setVisibleMarkets((prev) => [...prev, m])
+                              setSelectedSymbol(m)
+                              setMarketSearchQuery('')
+                              setIsSearchDropdownOpen(false)
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-[10px] text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors font-bold cursor-pointer"
+                          >
+                            + {m}
+                          </button>
+                        ))
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Main Chart Section */}
@@ -2754,33 +2871,9 @@ export default function Dashboard() {
               )}
 
               {/* Bottom Panels */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* AI Model Health */}
-                <div className="premium-card rounded-xl p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AI Model Health</p>
-                    <span className="text-[10px] text-[#00E676] font-bold bg-[#00E676]/10 px-2 py-0.5 rounded border border-[#00E676]/30">CONSENSUS BUY</span>
-                  </div>
-                  <div className="space-y-4">
-                    {algoMetrics.map((item, idx) => (
-                      <div key={idx} className="group hover:bg-[#162035] p-2 rounded transition-colors cursor-pointer">
-                        <div className="flex justify-between items-center text-[11px] mb-2">
-                          <span className="text-slate-300">{item.name}</span>
-                          <span className="font-mono-data text-cyan-400 group-hover:text-white transition-colors">{item.val}%</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-cyan-600/30 to-cyan-400 transition-all duration-[800ms] ease-out"
-                            style={{ width: `${item.currentWidth}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
+              <div className="w-full">
                 {/* Trade Log */}
-                <div className="premium-card rounded-xl p-6 h-[340px] flex flex-col">
+                <div className="premium-card rounded-xl p-6 h-[340px] flex flex-col w-full">
                   <div className="flex justify-between items-center mb-6 select-none">
                     <div className="flex items-center space-x-2">
                       <div className={`w-1.5 h-1.5 rounded-full ${autoTrade ? 'bg-[#00E676] animate-pulse' : 'bg-amber-500'}`}></div>
@@ -2834,19 +2927,99 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined text-sm mr-1 text-cyan-400">show_chart</span>
                   Select Market:
                 </span>
-                {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'NIFTY 50', 'RELIANCE', 'TCS'].map((pair) => (
-                  <button
-                    key={pair}
-                    onClick={() => setSelectedSymbol(pair)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border ${
-                      selectedSymbol === pair
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
-                        : 'bg-[#111827] border-[#1E2D4A] text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {pair}
-                  </button>
+                {visibleMarkets.map((pair) => (
+                  <div key={pair} className="relative flex items-center">
+                    <button
+                      onClick={() => setSelectedSymbol(pair)}
+                      className={`pl-3 pr-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
+                        selectedSymbol === pair
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                          : 'bg-[#111827] border-[#1E2D4A] text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>{pair}</span>
+                      {visibleMarkets.length > 1 && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const nextMarkets = visibleMarkets.filter((m) => m !== pair)
+                            setVisibleMarkets(nextMarkets)
+                            if (selectedSymbol === pair) {
+                              setSelectedSymbol(nextMarkets[0])
+                            }
+                          }}
+                          className="text-slate-500 hover:text-red-400 text-[11px] font-bold px-0.5 cursor-pointer"
+                          title="Remove from list"
+                        >
+                          ×
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 ))}
+
+                {/* Search & Add Market input */}
+                <div ref={marketSearchRef2} className="relative flex items-center">
+                  <div className="flex items-center bg-[#090D1A] border border-[#1E2D4A]/80 hover:border-cyan-500/40 rounded-lg px-2 py-1 text-xs text-slate-300 transition-colors">
+                    <span className="material-symbols-outlined text-xs mr-1 text-slate-500">search</span>
+                    <input
+                      type="text"
+                      placeholder="Add market..."
+                      value={marketSearchQuery2}
+                      onChange={(e) => {
+                        setMarketSearchQuery2(e.target.value)
+                        setIsSearchDropdownOpen2(true)
+                      }}
+                      onFocus={() => setIsSearchDropdownOpen2(true)}
+                      className="bg-transparent border-none outline-none text-[10px] text-white w-20 focus:w-28 transition-all duration-200 placeholder:text-slate-600 font-bold"
+                    />
+                    {marketSearchQuery2 && (
+                      <button
+                        onClick={() => {
+                          setMarketSearchQuery2('')
+                          setIsSearchDropdownOpen2(false)
+                        }}
+                        className="text-slate-500 hover:text-white ml-1 cursor-pointer font-bold"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isSearchDropdownOpen2 && (
+                    <div className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 w-40 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
+                      {(() => {
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+                        const filtered = allAvailableMarkets.filter(
+                          (m) =>
+                            !visibleMarkets.includes(m) &&
+                            m.toLowerCase().includes(marketSearchQuery2.toLowerCase())
+                        )
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="px-3 py-1.5 text-[9px] text-slate-500 font-bold">
+                              No markets found
+                            </div>
+                          )
+                        }
+                        return filtered.map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              setVisibleMarkets((prev) => [...prev, m])
+                              setSelectedSymbol(m)
+                              setMarketSearchQuery2('')
+                              setIsSearchDropdownOpen2(false)
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-[10px] text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors font-bold cursor-pointer"
+                          >
+                            + {m}
+                          </button>
+                        ))
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Full-Screen Technical Analysis Chart */}
