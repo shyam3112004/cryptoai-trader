@@ -145,6 +145,11 @@ export default function Dashboard() {
   })
   const [testNotifStatus, setTestNotifStatus] = useState('')
 
+  // Unique ID generator to prevent React key collisions
+  const generateUniqueId = () => {
+    return Math.random().toString(36).substring(2, 9) + '-' + Date.now()
+  }
+
   // Dynamic currency helpers
   const getCurrencySymbol = (sym) => {
     const target = sym || selectedSymbol
@@ -888,7 +893,7 @@ export default function Dashboard() {
             if (!autoTradeRef.current) return
             
             const newNotif = {
-              id: Date.now(),
+              id: generateUniqueId(),
               title: payload.title,
               desc: payload.body,
               time: payload.timestamp || 'Just now'
@@ -981,7 +986,7 @@ export default function Dashboard() {
 
                   setTradeHistory(prev => [
                     {
-                      id: Date.now(),
+                      id: generateUniqueId(),
                       date: formattedDate,
                       pair: selectedSymbolRef.current,
                       type: isShort ? 'SHORT' : 'LONG',
@@ -999,7 +1004,7 @@ export default function Dashboard() {
                   const displayExitPrice = typeof exitPriceVal === 'number' ? exitPriceVal.toLocaleString() : exitPriceVal
                   setLogs(prev => [
                     {
-                      id: Date.now(),
+                      id: generateUniqueId(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                       action: `CLOSE ${selectedSymbolRef.current}`,
                       qty: `10X @ ${symb}${displayExitPrice}`,
@@ -1022,7 +1027,7 @@ export default function Dashboard() {
                   // Add to execution logs card
                   setLogs(prev => [
                     {
-                      id: Date.now(),
+                      id: generateUniqueId(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                       action: `OPEN LONG ${selectedSymbolRef.current}`,
                       qty: `10X @ ${symb}${displayEntryPrice}`,
@@ -1186,7 +1191,7 @@ export default function Dashboard() {
                 const symb = getCurrencySymbol(currentSym)
                 setLogs(prev => [
                   {
-                    id: Date.now(),
+                    id: generateUniqueId(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                     action: `OPEN LONG ${currentSym}`,
                     qty: `10X @ ${symb}${newClose.toLocaleString()}`,
@@ -1274,7 +1279,7 @@ export default function Dashboard() {
                 const formatPnl = finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`
                 setLogs(prev => [
                   {
-                    id: Date.now(),
+                    id: generateUniqueId(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                     action: `CLOSE ${currentSym}`,
                     qty: `10X @ ${symb}${newClose.toLocaleString()}`,
@@ -1289,7 +1294,7 @@ export default function Dashboard() {
                 const returnPctStr = finalPnl >= 0 ? `+${pnlPctVal.toFixed(2)}%` : `${pnlPctVal.toFixed(2)}%`
                 setTradeHistory(prev => [
                   {
-                    id: Date.now(),
+                    id: generateUniqueId(),
                     date: formattedDate,
                     pair: currentSym,
                     type: 'LONG',
@@ -1547,7 +1552,7 @@ export default function Dashboard() {
       setAutoTrade(true)
       setLogs(prev => [
         {
-          id: Date.now(),
+          id: generateUniqueId(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           action: 'SYSTEM RESTORED',
           qty: 'Emergency lockdown lifted',
@@ -1564,7 +1569,7 @@ export default function Dashboard() {
 
       setLogs(prev => [
         {
-          id: Date.now(),
+          id: generateUniqueId(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           action: 'SYSTEM EMERGENCY SHUTDOWN',
           qty: 'All open positions closed',
