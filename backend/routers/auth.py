@@ -260,6 +260,13 @@ class SettingsUpdateRequest(BaseModel):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     enable_telegram: bool | None = None
+    active_mode: str | None = None
+    daily_profit_target: float | None = None
+    daily_loss_limit: float | None = None
+    enable_trailing_stop: bool | None = None
+    auto_start_on_login: bool | None = None
+    trade_investment_usd: float | None = None
+    trade_investment_inr: float | None = None
 
 class SettingsResponse(BaseModel):
     broker_gateway: str | None = None
@@ -275,6 +282,13 @@ class SettingsResponse(BaseModel):
     callmebot_apikey: str | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    active_mode: str = "demo"
+    daily_profit_target: float = 0.0
+    daily_loss_limit: float = 0.0
+    enable_trailing_stop: bool = False
+    auto_start_on_login: bool = False
+    trade_investment_usd: float = 100.0
+    trade_investment_inr: float = 10000.0
 
 @router.post("/settings")
 async def update_settings(
@@ -317,6 +331,20 @@ async def update_settings(
         user_settings.enable_telegram = request.enable_telegram
     if request.trade_pacing is not None:
         user_settings.trade_pacing = request.trade_pacing
+    if request.active_mode is not None:
+        current_user.active_mode = request.active_mode
+    if request.daily_profit_target is not None:
+        user_settings.daily_profit_target = request.daily_profit_target
+    if request.daily_loss_limit is not None:
+        user_settings.daily_loss_limit = request.daily_loss_limit
+    if request.enable_trailing_stop is not None:
+        user_settings.enable_trailing_stop = request.enable_trailing_stop
+    if request.auto_start_on_login is not None:
+        user_settings.auto_start_on_login = request.auto_start_on_login
+    if request.trade_investment_usd is not None:
+        user_settings.trade_investment_usd = request.trade_investment_usd
+    if request.trade_investment_inr is not None:
+        user_settings.trade_investment_inr = request.trade_investment_inr
         
     await db.commit()
     return {"status": "success", "message": "Settings updated successfully"}
@@ -348,6 +376,13 @@ async def get_settings(
         whatsapp_number=current_user.whatsapp_number,
         callmebot_apikey=current_user.callmebot_apikey,
         telegram_bot_token=current_user.telegram_bot_token,
-        telegram_chat_id=current_user.telegram_chat_id
+        telegram_chat_id=current_user.telegram_chat_id,
+        active_mode=current_user.active_mode or "demo",
+        daily_profit_target=user_settings.daily_profit_target or 0.0,
+        daily_loss_limit=user_settings.daily_loss_limit or 0.0,
+        enable_trailing_stop=bool(user_settings.enable_trailing_stop),
+        auto_start_on_login=bool(user_settings.auto_start_on_login),
+        trade_investment_usd=user_settings.trade_investment_usd or 100.0,
+        trade_investment_inr=user_settings.trade_investment_inr or 10000.0
     )
 

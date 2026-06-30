@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python / Virtualenv
+__pycache__/
+*.pyc
+venv/
+backend/venv/
+
+# Databases
+*.db
+*.db-journal
+
+# Bot State
+active_trades.json
+bot_state.json
+models_state.json

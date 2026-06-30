@@ -32,12 +32,18 @@ class UserSetting(Base):
     max_open_positions = Column(Integer, default=3)
     stop_loss_limit = Column(Float, default=2.0)
     profit_target = Column(String, default="1.5X")
+    daily_profit_target = Column(Float, default=0.0) # 0 = disabled
+    daily_loss_limit = Column(Float, default=0.0) # 0 = disabled
+    enable_trailing_stop = Column(Boolean, default=False)
+    auto_start_on_login = Column(Boolean, default=False)
     enable_whatsapp = Column(Boolean, default=True)
     enable_telegram = Column(Boolean, default=False)
     broker_gateway = Column(String, nullable=True)
     broker_api_key = Column(String, nullable=True)
     broker_api_secret = Column(String, nullable=True)
     trade_pacing = Column(String, default="rapid")
+    trade_investment_usd = Column(Float, default=100.0)
+    trade_investment_inr = Column(Float, default=10000.0)
 
     # Relationship back to User
     user = relationship("User", back_populates="settings")
@@ -54,6 +60,8 @@ class TradeHistory(Base):
     profit = Column(String, nullable=False) # e.g. +$245.00
     return_pct = Column(String, nullable=False) # e.g. +2.45%
     status = Column(String, nullable=False) # TARGET HIT, STOP LOSS, MANUAL
+    entry_price = Column(Float, nullable=True)
+    exit_price = Column(Float, nullable=True)
 
     # Relationship back to User
     user = relationship("User", back_populates="trades")

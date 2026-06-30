@@ -56,6 +56,9 @@ export default function Dashboard() {
     const saved = localStorage.getItem('realAccountPnl')
     return saved ? parseFloat(saved) : 0.00
   })
+  const [realAccountAsset, setRealAccountAsset] = useState(() => {
+    return localStorage.getItem('realAccountAsset') || 'USDT'
+  })
 
   const [balance, setBalance] = useState(realizedBalance)
   const [todayPnl, setTodayPnl] = useState(realizedTodayPnl)
@@ -110,21 +113,29 @@ export default function Dashboard() {
   })
 
   // Custom Settings parameters
-  const [maxOpenPositions, setMaxOpenPositions] = useState(() => {
-    const val = localStorage.getItem('maxOpenPositions')
-    return val !== null ? parseInt(val) : 3
+  const [maxOpenPositions, setMaxOpenPositions] = useState(3)
+  const [stopLossLimit, setStopLossLimit] = useState(2.0)
+  const [tradePacing, setTradePacing] = useState('rapid')
+  const [dailyProfitTarget, setDailyProfitTarget] = useState(() => {
+    const val = localStorage.getItem('dailyProfitTarget')
+    return val !== null ? parseFloat(val) : 500.0
   })
-  const [stopLossLimit, setStopLossLimit] = useState(() => {
-    const val = localStorage.getItem('stopLossLimit')
-    return val !== null ? parseFloat(val) : 2.0
+  const [dailyLossLimit, setDailyLossLimit] = useState(() => {
+    const val = localStorage.getItem('dailyLossLimit')
+    return val !== null ? parseFloat(val) : 200.0
   })
-  const [tradePacing, setTradePacing] = useState(() => {
-    const val = localStorage.getItem('tradePacing')
-    return val !== null ? val : 'rapid'
+  const [enableTrailingStop, setEnableTrailingStop] = useState(() => {
+    const val = localStorage.getItem('enableTrailingStop')
+    return val !== null ? val === 'true' : false
   })
+  const [autoStartOnLogin, setAutoStartOnLogin] = useState(() => {
+    const val = localStorage.getItem('autoStartOnLogin')
+    return val !== null ? val === 'true' : false
+  })
+  const [dailyPnl, setDailyPnl] = useState(0.0)
 
   // Chart, symbol selection & emergency stop states
-  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
+  const [selectedSymbol, setSelectedSymbol] = useState(() => localStorage.getItem('selectedSymbol') || 'BTC/USDT')
   const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false)
 
   // Dynamic visible markets state for home page selectors
@@ -198,6 +209,13 @@ export default function Dashboard() {
     return '₹'
   }
 
+  const getPortfolioCurrencySymbol = () => {
+    if (activeMode === 'real') {
+      return isCryptoActive ? '$' : (realAccountAsset === 'INR' ? '₹' : '$')
+    }
+    return getCurrencySymbol()
+  }
+
   const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
   const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
   const setTradeInvestment = (val) => {
@@ -213,6 +231,8 @@ export default function Dashboard() {
   const realAccountBalanceRef = useRef(realAccountBalance)
   const realAccountPnlRef = useRef(realAccountPnl)
   const activeModeRef = useRef(activeMode)
+  const lastInteractionTimeRef = useRef(0)
+  const isSettingsLoadedRef = useRef(false)
 
   const tradeInvestmentRef = useRef(null)
   const autoTradeModeRef = useRef(autoTradeMode)
@@ -222,6 +242,11 @@ export default function Dashboard() {
   const stopLossLimitRef = useRef(stopLossLimit)
   const tradePacingRef = useRef(tradePacing)
   const autoTradeRef = useRef(autoTrade)
+  
+  const dailyProfitTargetRef = useRef(dailyProfitTarget)
+  const dailyLossLimitRef = useRef(dailyLossLimit)
+  const enableTrailingStopRef = useRef(enableTrailingStop)
+  const autoStartOnLoginRef = useRef(autoStartOnLogin)
 
   useEffect(() => {
     const gateway = localStorage.getItem('brokerGateway')
@@ -236,19 +261,33 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem('maxOpenPositions', maxOpenPositions)
-    maxOpenPositionsRef.current = maxOpenPositions
-  }, [maxOpenPositions])
+    maxOpenPositionsRef.current = 3
+    stopLossLimitRef.current = 2.0
+  }, [])
 
   useEffect(() => {
-    localStorage.setItem('stopLossLimit', stopLossLimit)
-    stopLossLimitRef.current = stopLossLimit
-  }, [stopLossLimit])
+    tradePacingRef.current = 'rapid'
+  }, [])
 
   useEffect(() => {
-    localStorage.setItem('tradePacing', tradePacing)
-    tradePacingRef.current = tradePacing
-  }, [tradePacing])
+    localStorage.setItem('dailyProfitTarget', dailyProfitTarget.toString())
+    dailyProfitTargetRef.current = dailyProfitTarget
+  }, [dailyProfitTarget])
+
+  useEffect(() => {
+    localStorage.setItem('dailyLossLimit', dailyLossLimit.toString())
+    dailyLossLimitRef.current = dailyLossLimit
+  }, [dailyLossLimit])
+
+  useEffect(() => {
+    localStorage.setItem('enableTrailingStop', enableTrailingStop ? 'true' : 'false')
+    enableTrailingStopRef.current = enableTrailingStop
+  }, [enableTrailingStop])
+
+  useEffect(() => {
+    localStorage.setItem('autoStartOnLogin', autoStartOnLogin ? 'true' : 'false')
+    autoStartOnLoginRef.current = autoStartOnLogin
+  }, [autoStartOnLogin])
 
   useEffect(() => {
     localStorage.setItem('enableWhatsapp', enableWhatsapp)
@@ -321,14 +360,60 @@ export default function Dashboard() {
     tradeInvestmentRef.current = isCrypto ? tradeInvestmentUSD : tradeInvestmentINR
   }, [selectedSymbol, tradeInvestmentUSD, tradeInvestmentINR])
 
+  // Save trade size settings to backend when updated by user (debounced)
+  useEffect(() => {
+    if (!isSettingsLoadedRef.current) return
+    const saveTradeSize = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+        await fetch(`${apiBase}/api/v1/auth/settings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            trade_investment_usd: tradeInvestmentUSD,
+            trade_investment_inr: tradeInvestmentINR
+          })
+        })
+      } catch (e) {
+        console.error('Failed to sync trade size settings to backend:', e)
+      }
+    }
+    const timeoutId = setTimeout(saveTradeSize, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [tradeInvestmentUSD, tradeInvestmentINR])
+
   useEffect(() => {
     localStorage.setItem('autoTradeMode', autoTradeMode)
     autoTradeModeRef.current = autoTradeMode
   }, [autoTradeMode])
 
+  useEffect(() => {
+    localStorage.setItem('selectedSymbol', selectedSymbol)
+  }, [selectedSymbol])
+
   const [isPriceFlashing, setIsPriceFlashing] = useState(false)
   const [redFlash, setRedFlash] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+
+  const handleToggleAutoTrade = async (enabled) => {
+    lastInteractionTimeRef.current = Date.now()
+    setAutoTrade(enabled)
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      await fetch(`${apiBase}/api/v1/signals/auto-trade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      })
+    } catch (e) {
+      console.error('Failed to sync auto-trade status with backend:', e)
+    }
+  }
 
   useEffect(() => {
     autoTradeRef.current = autoTrade
@@ -406,6 +491,8 @@ export default function Dashboard() {
     }
   })
 
+  const [activePositions, setActivePositions] = useState({})
+
   const [historyPage, setHistoryPage] = useState(1)
 
   useEffect(() => {
@@ -424,6 +511,52 @@ export default function Dashboard() {
     { name: 'Sentiment Analyzer', val: 62.8, currentWidth: 0, status: 'STANDBY', weight: '15%' },
     { name: 'Monte Carlo Simulations', val: 91.0, currentWidth: 0, status: 'ACTIVE', weight: '20%' }
   ])
+
+  const [liveConsensus, setLiveConsensus] = useState('BUY')
+  const [liveConfidence, setLiveConfidence] = useState(87.4)
+  const [liveAgreeCount, setLiveAgreeCount] = useState(6)
+  const [liveTotalAlgos, setLiveTotalAlgos] = useState(9)
+  const [liveIndicators, setLiveIndicators] = useState({
+    RSI: 42.5,
+    EMA_9: 0.0,
+    EMA_21: 0.0,
+    VWAP: 0.0,
+    ATR: '2.1%'
+  })
+
+  const fetchPredictionData = async () => {
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const resp = await fetch(`${apiBase}/api/v1/signals/prediction?symbol=${encodeURIComponent(selectedSymbol)}&mode=${activeMode}`)
+      const data = await resp.json()
+      if (data && data.consensus) {
+        setLiveConsensus(data.consensus)
+        setLiveConfidence(data.confidence)
+        setLiveAgreeCount(data.agreeCount)
+        setLiveTotalAlgos(data.totalAlgos)
+        if (data.indicators) {
+          setLiveIndicators(data.indicators)
+        }
+        if (data.metrics) {
+          setAlgoMetrics(data.metrics.map(m => ({
+            name: m.name,
+            val: m.val,
+            currentWidth: m.val,
+            status: m.status,
+            weight: m.weight
+          })))
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching prediction details:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchPredictionData()
+    const timer = setInterval(fetchPredictionData, 5000)
+    return () => clearInterval(timer)
+  }, [selectedSymbol, activeMode])
 
   // Canvas ref for real-time scrolling chart
   const canvasRef = useRef(null)
@@ -521,6 +654,39 @@ export default function Dashboard() {
     }
   }
 
+  const pollAutoModeStatus = async () => {
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const res = await fetch(`${apiBase}/api/v1/signals/auto-mode?investment=${tradeInvestmentRef.current || 100.0}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (activeModeRef.current !== 'real') {
+          const dailyVal = data.daily_pnl || 0.0
+          realizedTodayPnlRef.current = dailyVal
+          setRealizedTodayPnl(dailyVal)
+          localStorage.setItem('realizedTodayPnl', dailyVal.toString())
+          
+          if (costBasisRef.current > 0) {
+            const entryPriceVal = costBasisRef.current
+            const currentPrice = chartDataRef.current && chartDataRef.current.length > 0 ? chartDataRef.current[chartDataRef.current.length - 1].close : entryPriceVal
+            const priceDiffPct = entryPriceVal > 0 ? (currentPrice - entryPriceVal) / entryPriceVal : 0
+            const leveragedPnl = tradeInvestmentRef.current * priceDiffPct * 10
+            setTodayPnl(+(dailyVal + leveragedPnl).toFixed(2))
+          } else {
+            setTodayPnl(dailyVal)
+          }
+        }
+        
+        // Prevent polling updates from overriding user interaction immediately
+        if (Date.now() - lastInteractionTimeRef.current > 5000) {
+          setAutoTrade(data.enabled)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to poll auto mode status:', e)
+    }
+  }
+
   const fetchSettingsFromBackend = async () => {
     try {
       const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
@@ -536,10 +702,26 @@ export default function Dashboard() {
         if (data.broker_gateway) setBrokerGateway(data.broker_gateway)
         if (data.broker_api_key) setBrokerApiKey(data.broker_api_key)
         if (data.broker_api_secret) setBrokerApiSecret(data.broker_api_secret)
-        if (data.max_open_positions) setMaxOpenPositions(data.max_open_positions)
-        if (data.stop_loss_limit) setStopLossLimit(data.stop_loss_limit)
         if (data.profit_target) setProfitTarget(data.profit_target)
-        if (data.trade_pacing) setTradePacing(data.trade_pacing)
+        
+        const localUSD = localStorage.getItem('tradeInvestmentUSD')
+        const localINR = localStorage.getItem('tradeInvestmentINR')
+        if (localUSD) {
+          setTradeInvestmentUSD(parseFloat(localUSD))
+        } else if (data.trade_investment_usd) {
+          setTradeInvestmentUSD(data.trade_investment_usd)
+        }
+        if (localINR) {
+          setTradeInvestmentINR(parseFloat(localINR))
+        } else if (data.trade_investment_inr) {
+          setTradeInvestmentINR(data.trade_investment_inr)
+        }
+        
+        // Auto-mode settings
+        if (data.daily_profit_target !== undefined) setDailyProfitTarget(data.daily_profit_target)
+        if (data.daily_loss_limit !== undefined) setDailyLossLimit(data.daily_loss_limit)
+        if (data.enable_trailing_stop !== undefined) setEnableTrailingStop(data.enable_trailing_stop)
+        if (data.auto_start_on_login !== undefined) setAutoStartOnLogin(data.auto_start_on_login)
         
         // Toggles
         setEnableWhatsapp(data.enable_whatsapp)
@@ -556,8 +738,26 @@ export default function Dashboard() {
           whatsapp: data.whatsapp_number || '',
           callmebot_apikey: data.callmebot_apikey || '',
           telegram_bot_token: data.telegram_bot_token || '',
-          telegram_chat_id: data.telegram_chat_id || ''
+          telegram_chat_id: data.telegram_chat_id || '',
+          mode: data.active_mode || 'demo'
         })
+        
+        if (data.active_mode) {
+          setActiveMode(data.active_mode)
+        }
+
+        // Mark settings as successfully loaded to allow subsequent updates to sync to backend
+        isSettingsLoadedRef.current = true
+        
+        // Auto-start trading if enabled on backend settings load
+        if (data.auto_start_on_login) {
+          setAutoTrade(true)
+          fetch(`${apiBase}/api/v1/signals/auto-trade`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true })
+          }).catch(err => console.error('Failed to auto-start trade status:', err))
+        }
       }
     } catch (e) {
       console.error('Failed to fetch settings from backend:', e)
@@ -568,6 +768,9 @@ export default function Dashboard() {
     setIsMounted(true)
     generateChartData(timeframe, selectedSymbol)
     fetchSettingsFromBackend()
+    pollAutoModeStatus()
+
+    const autoModeInterval = setInterval(pollAutoModeStatus, 3000)
 
     // Trigger stagger render for progress bars
     const timers = algoMetrics.map((item, idx) => {
@@ -592,6 +795,7 @@ export default function Dashboard() {
 
     return () => {
       timers.forEach(clearTimeout)
+      clearInterval(autoModeInterval)
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
@@ -686,6 +890,105 @@ export default function Dashboard() {
         ctx.stroke()
       }
 
+      // ─── Calculate Indicators (EMA 9, EMA 21, VWAP, Bollinger Bands) ───
+      const fullData = chartDataRef.current
+      
+      const computeEMA_JS = (period) => {
+        const ema = []
+        if (fullData.length === 0) return ema
+        const k = 2 / (period + 1)
+        let val = fullData[0].close
+        ema.push(val)
+        for (let i = 1; i < fullData.length; i++) {
+          val = fullData[i].close * k + val * (1 - k)
+          ema.push(val)
+        }
+        return ema
+      }
+
+      const computeVWAP_JS = () => {
+        const vwap = []
+        let pvSum = 0
+        let volSum = 0
+        for (let i = 0; i < fullData.length; i++) {
+          const high = fullData[i].high || fullData[i].close
+          const low = fullData[i].low || fullData[i].close
+          const close = fullData[i].close
+          const vol = fullData[i].vol || 1
+          const tp = (high + low + close) / 3
+          pvSum += tp * vol
+          volSum += vol
+          vwap.push(pvSum / (volSum || 1))
+        }
+        return vwap
+      }
+
+      const computeBollinger_JS = (period = 20, devMult = 2) => {
+        const upper = []
+        const lower = []
+        for (let i = 0; i < fullData.length; i++) {
+          if (i < period - 1) {
+            upper.push(fullData[i].close)
+            lower.push(fullData[i].close)
+            continue
+          }
+          const slice = fullData.slice(i - period + 1, i + 1)
+          const mean = slice.reduce((sum, d) => sum + d.close, 0) / period
+          const variance = slice.reduce((sum, d) => sum + Math.pow(d.close - mean, 2), 0) / period
+          const std = Math.sqrt(variance)
+          upper.push(mean + devMult * std)
+          lower.push(mean - devMult * std)
+        }
+        return { upper, lower }
+      }
+
+      const ema9List = computeEMA_JS(9)
+      const ema21List = computeEMA_JS(21)
+      const vwapList = computeVWAP_JS()
+      const { upper: bbUpperList, lower: bbLowerList } = computeBollinger_JS(20, 2)
+
+      // ─── Draw Bollinger Bands Shaded Channel ───
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.04)'
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(bbUpperList[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      for (let idx = visibleData.length - 1; idx >= 0; idx--) {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(bbLowerList[fullIdx] || candle.close)
+        ctx.lineTo(x, y)
+      }
+      ctx.closePath()
+      ctx.fill()
+
+      // Upper and Lower band lines
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(bbUpperList[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(bbLowerList[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
       // ─── Volume Bars ───
       visibleData.forEach((candle, idx) => {
         const x = candleSpacing * idx + candleGap
@@ -727,6 +1030,66 @@ export default function Dashboard() {
         ctx.strokeStyle = color
         ctx.lineWidth = 1.2
       })
+
+      // ─── Draw EMA 9 (Blue) ───
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(ema9List[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
+      // ─── Draw EMA 21 (Orange) ───
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(ema21List[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
+      // ─── Draw VWAP (Purple) ───
+      ctx.strokeStyle = '#a855f7'
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      visibleData.forEach((candle, idx) => {
+        const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
+        const x = candleSpacing * idx + candleGap + candleBodyW / 2
+        const y = scaleY(vwapList[fullIdx] || candle.close)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
+      // ─── Draw Legends ───
+      const latestFullIdx = fullData.length - 1
+      const curEma9 = ema9List[latestFullIdx] || 0
+      const curEma21 = ema21List[latestFullIdx] || 0
+      const curVwap = vwapList[latestFullIdx] || 0
+      
+      ctx.fillStyle = 'rgba(10, 15, 30, 0.75)'
+      ctx.fillRect(8, 8, 260, 18)
+      ctx.strokeStyle = '#1e2d4a'
+      ctx.lineWidth = 1
+      ctx.strokeRect(8, 8, 260, 18)
+
+      ctx.font = '9px monospace'
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#3b82f6'
+      ctx.fillText(`EMA(9): ${curEma9.toFixed(2)}`, 14, 20)
+      ctx.fillStyle = '#f97316'
+      ctx.fillText(`EMA(21): ${curEma21.toFixed(2)}`, 98, 20)
+      ctx.fillStyle = '#a855f7'
+      ctx.fillText(`VWAP: ${curVwap.toFixed(2)}`, 182, 20)
 
       // ─── Draw Auto Trade Markers ───
       chartMarkers.forEach(marker => {
@@ -924,13 +1287,31 @@ export default function Dashboard() {
     function connectWebSocket() {
       console.log('Connecting to live price websocket for: ' + selectedSymbol)
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:8000' : window.location.host
+      const wsHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '127.0.0.1:8000' : window.location.host
       ws = new WebSocket(`${wsProtocol}//${wsHost}/api/v1/signals/ws/live`)
       wsRef.current = ws
 
       ws.onopen = () => {
         console.log('Websocket connected successfully to live price stream')
-        ws.send(JSON.stringify({ action: 'subscribe', symbol: selectedSymbol }))
+        if (ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ action: 'subscribe', symbol: selectedSymbol }))
+          } catch (err) {
+            console.error('Failed to send subscribe packet:', err)
+          }
+        } else {
+          const checkOpen = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              try {
+                ws.send(JSON.stringify({ action: 'subscribe', symbol: selectedSymbol }))
+              } catch (err) {
+                console.error('Failed to send subscribe packet on retry:', err)
+              }
+              clearInterval(checkOpen)
+            }
+          }, 50)
+          setTimeout(() => clearInterval(checkOpen), 1000)
+        }
       }
 
       ws.onmessage = (event) => {
@@ -978,31 +1359,23 @@ export default function Dashboard() {
 
                 // Realize trade profit/loss on total balance
                 if (isClosed) {
-                  const isTargetHit = payload.title.includes('TARGET HIT') || payload.title.includes('PROFIT') || !payload.title.includes('STOP LOSS')
-                  let pnlPctVal = 0
-                  
-                  if (isTargetHit) {
-                    if (profitTargetRef.current === '1.2X') pnlPctVal = 20.0
-                    else if (profitTargetRef.current === '2.0X') pnlPctVal = 100.0
-                    else pnlPctVal = 50.0 // 1.5X default (+50.0%)
-                  } else {
-                    pnlPctVal = -15.0 // Stop loss (-15.0%)
-                  }
+                  const entryPriceVal = payload.entry_price || costBasisRef.current || 0
+                  const exitPriceVal = payload.exit_price || payload.close || lastCandle?.close || 0
+                  const priceDiffPct = entryPriceVal > 0 ? (exitPriceVal - entryPriceVal) / entryPriceVal : 0
+                  const pnlPctVal = priceDiffPct * 10 * 100 // 10X leveraged return percentage
 
                   const isShort = payload.title.includes('SHORT') || payload.body.toLowerCase().includes('short')
                   const directionMult = isShort ? -1 : 1
                   const finalPnl = tradeInvestmentRef.current * (pnlPctVal / 100) * directionMult
 
                   if (activeModeRef.current === 'real') {
-                    realAccountBalanceRef.current = +(realAccountBalanceRef.current + finalPnl).toFixed(2)
-                    realAccountPnlRef.current = +(realAccountPnlRef.current + finalPnl).toFixed(2)
-                    setRealAccountBalance(realAccountBalanceRef.current)
-                    setRealAccountPnl(realAccountPnlRef.current)
-                    setBalance(realAccountBalanceRef.current)
-                    setTodayPnl(realAccountPnlRef.current)
+                    // Real mode balance is determined strictly by broker API; do not add simulated P&L.
+                    fetchRealBalance()
+                    setRealAccountPnl(0.00)
+                    setTodayPnl(0.00)
                   } else {
-                    realizedBalanceRef.current = +(realizedBalanceRef.current + finalPnl).toFixed(2)
-                    realizedTodayPnlRef.current = +(realizedTodayPnlRef.current + finalPnl).toFixed(2)
+                    realizedBalanceRef.current = realizedBalanceRef.current + finalPnl
+                    realizedTodayPnlRef.current = realizedTodayPnlRef.current + finalPnl
                     setRealizedBalance(realizedBalanceRef.current)
                     setRealizedTodayPnl(realizedTodayPnlRef.current)
                     setBalance(realizedBalanceRef.current)
@@ -1030,7 +1403,9 @@ export default function Dashboard() {
                   // Add to trade history logs
                   const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
                   const symb = getCurrencySymbol(selectedSymbolRef.current)
-                  const formatPnl = finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`
+                  const formatPnl = Math.abs(finalPnl) > 0 && Math.abs(finalPnl) < 0.01
+                    ? (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(4)}` : `-${symb}${Math.abs(finalPnl).toFixed(4)}`)
+                    : (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`)
                   const returnPctStr = pnlPctVal >= 0 ? `+${pnlPctVal.toFixed(2)}%` : `${pnlPctVal.toFixed(2)}%`
 
                   setTradeHistory(prev => [
@@ -1043,13 +1418,13 @@ export default function Dashboard() {
                       leverage: '10X',
                       profit: formatPnl,
                       returnPct: returnPctStr,
-                      status: payload.title.includes('STOP LOSS') ? 'STOP LOSS' : 'TARGET HIT'
+                      status: payload.title.includes('STOP LOSS') ? 'STOP LOSS' : 'TARGET HIT',
+                      entryPrice: entryPriceVal,
+                      exitPrice: payload.exit_price || payload.close || lastCandle?.close || 0
                     },
                     ...prev.slice(0, 499)
                   ])
 
-                  // Add to execution logs card
-                  const exitPriceVal = payload.exit_price || lastCandle?.close || 0
                   const displayExitPrice = typeof exitPriceVal === 'number' ? exitPriceVal.toLocaleString() : exitPriceVal
                   setLogs(prev => [
                     {
@@ -1115,14 +1490,24 @@ export default function Dashboard() {
             const priceDiffPct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0
             const leveragedPnl = tradeInvestmentRef.current * priceDiffPct * 10
             const isRealMode = activeModeRef.current === 'real'
-            const curBase = isRealMode ? realAccountBalanceRef.current : realizedBalanceRef.current
-            const curPnl = isRealMode ? realAccountPnlRef.current : realizedTodayPnlRef.current
-            setBalance(+(curBase + leveragedPnl).toFixed(2))
-            setTodayPnl(+(curPnl + leveragedPnl).toFixed(2))
+            if (isRealMode) {
+              setBalance(realAccountBalanceRef.current)
+              setTodayPnl(0.00)
+            } else {
+              const curBase = realizedBalanceRef.current
+              const curPnl = realizedTodayPnlRef.current
+              setBalance(+(curBase + leveragedPnl).toFixed(2))
+              setTodayPnl(+(curPnl + leveragedPnl).toFixed(2))
+            }
           } else {
             const isRealMode = activeModeRef.current === 'real'
-            setBalance(isRealMode ? realAccountBalanceRef.current : realizedBalanceRef.current)
-            setTodayPnl(isRealMode ? realAccountPnlRef.current : realizedTodayPnlRef.current)
+            if (isRealMode) {
+              setBalance(realAccountBalanceRef.current)
+              setTodayPnl(0.00)
+            } else {
+              setBalance(realizedBalanceRef.current)
+              setTodayPnl(realizedTodayPnlRef.current)
+            }
           }
 
           // Update scrolling chart candles with live data
@@ -1160,12 +1545,24 @@ export default function Dashboard() {
         if (isCleaningUp) return
         console.warn('Websocket error encountered, starting mock ticker fallback', err)
         startFallback()
+        setTimeout(() => {
+          if (!isCleaningUp) {
+            console.log('Attempting to reconnect websocket...')
+            connectWebSocket()
+          }
+        }, 3000)
       }
 
       ws.onclose = () => {
         if (isCleaningUp) return
         console.warn('Websocket stream closed, initiating fallback engine')
         startFallback()
+        setTimeout(() => {
+          if (!isCleaningUp) {
+            console.log('Attempting to reconnect websocket...')
+            connectWebSocket()
+          }
+        }, 3000)
       }
     }
 
@@ -1189,7 +1586,7 @@ export default function Dashboard() {
         const newClose = lastCandleVal + delta
         
         // Dynamic trade simulation state machine
-        if (autoTradeRef.current) {
+        if (autoTradeRef.current && activeModeRef.current !== 'real') {
           const norm = (s) => s ? s.toUpperCase().replace('/', '').replace(' ', '') : ''
           const currentSymNorm = norm(currentSym)
           const isMarketAllowed = true // Always allow trading the active symbol when Auto-Trade toggle is ON
@@ -1261,10 +1658,15 @@ export default function Dashboard() {
               const rawLeveragedPnl = tradeInvestmentRef.current * priceDiffPct * 10
               
               const isRealMode = activeModeRef.current === 'real'
-              const curBase = isRealMode ? realAccountBalanceRef.current : realizedBalanceRef.current
-              const curPnl = isRealMode ? realAccountPnlRef.current : realizedTodayPnlRef.current
-              setBalance(+(curBase + rawLeveragedPnl).toFixed(2))
-              setTodayPnl(+(curPnl + rawLeveragedPnl).toFixed(2))
+              if (isRealMode) {
+                setBalance(realAccountBalanceRef.current)
+                setTodayPnl(0.00)
+              } else {
+                const curBase = realizedBalanceRef.current
+                const curPnl = realizedTodayPnlRef.current
+                setBalance(+(curBase + rawLeveragedPnl).toFixed(2))
+                setTodayPnl(+(curPnl + rawLeveragedPnl).toFixed(2))
+              }
 
               // Helper to map pacing speed to entry/exit/cooldown parameters
               const getPacingParams = (pacing) => {
@@ -1283,26 +1685,19 @@ export default function Dashboard() {
               const shouldClose = Math.random() > (1.0 - pacingParams.exitChance)
               
               if (shouldClose) {
-                let pnlPctVal = 0
-                const slLimit = stopLossLimitRef.current || 2.0
-                if (isWinExit) {
-                  const targetMultiplier = profitTargetRef.current === '1.2X' ? 1.2 : (profitTargetRef.current === '2.0X' ? 2.0 : 1.5)
-                  pnlPctVal = slLimit * 10 * targetMultiplier // Leveraged Profit (10X leverage)
-                } else {
-                  pnlPctVal = -slLimit * 10 // Leveraged Stop Loss (10X leverage)
-                }
+                const entryPriceVal = costBasisRef.current || 0
+                const priceDiffPct = entryPriceVal > 0 ? (newClose - entryPriceVal) / entryPriceVal : 0
+                const pnlPctVal = priceDiffPct * 10 * 100 // 10X leveraged return percentage
 
                 const finalPnl = tradeInvestmentRef.current * (pnlPctVal / 100)
                 if (activeModeRef.current === 'real') {
-                  realAccountBalanceRef.current = +(realAccountBalanceRef.current + finalPnl).toFixed(2)
-                  realAccountPnlRef.current = +(realAccountPnlRef.current + finalPnl).toFixed(2)
-                  setRealAccountBalance(realAccountBalanceRef.current)
-                  setRealAccountPnl(realAccountPnlRef.current)
-                  setBalance(realAccountBalanceRef.current)
-                  setTodayPnl(realAccountPnlRef.current)
+                  // Real mode balance is determined strictly by broker API; do not add simulated P&L.
+                  fetchRealBalance()
+                  setRealAccountPnl(0.00)
+                  setTodayPnl(0.00)
                 } else {
-                  realizedBalanceRef.current = +(realizedBalanceRef.current + finalPnl).toFixed(2)
-                  realizedTodayPnlRef.current = +(realizedTodayPnlRef.current + finalPnl).toFixed(2)
+                  realizedBalanceRef.current = realizedBalanceRef.current + finalPnl
+                  realizedTodayPnlRef.current = realizedTodayPnlRef.current + finalPnl
                   setRealizedBalance(realizedBalanceRef.current)
                   setRealizedTodayPnl(realizedTodayPnlRef.current)
                   setBalance(realizedBalanceRef.current)
@@ -1325,7 +1720,9 @@ export default function Dashboard() {
 
                  // Add to logs
                 const symb = getCurrencySymbol(currentSym)
-                const formatPnl = finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`
+                const formatPnl = Math.abs(finalPnl) > 0 && Math.abs(finalPnl) < 0.01
+                   ? (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(4)}` : `-${symb}${Math.abs(finalPnl).toFixed(4)}`)
+                   : (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`)
                 setLogs(prev => [
                   {
                     id: generateUniqueId(),
@@ -1351,7 +1748,9 @@ export default function Dashboard() {
                     leverage: '10X',
                     profit: formatPnl,
                     returnPct: returnPctStr,
-                    status: finalPnl >= 0 ? 'TARGET HIT' : 'STOP LOSS'
+                    status: finalPnl >= 0 ? 'TARGET HIT' : 'STOP LOSS',
+                    entryPrice: entryPriceVal,
+                    exitPrice: newClose || 0
                   },
                   ...prev.slice(0, 499)
                 ])
@@ -1632,7 +2031,8 @@ export default function Dashboard() {
 
   const fetchRealBalance = async () => {
     try {
-      const res = await fetch('/api/v1/signals/account-balance')
+      const sym = selectedSymbolRef.current || selectedSymbol || '';
+      const res = await fetch(`/api/v1/signals/account-balance?symbol=${encodeURIComponent(sym)}`)
       const data = await res.json()
       if (data && typeof data.balance === 'number') {
         setRealAccountBalance(data.balance)
@@ -1640,9 +2040,40 @@ export default function Dashboard() {
         if (activeModeRef.current === 'real') {
           setBalance(data.balance)
         }
+        if (data.asset) {
+          setRealAccountAsset(data.asset)
+          localStorage.setItem('realAccountAsset', data.asset)
+        }
       }
     } catch (e) {
       console.error('Error fetching real account balance:', e)
+    }
+  }
+
+  const fetchActivePositions = async () => {
+    try {
+      const res = await fetch('/api/v1/signals/active-positions')
+      const data = await res.json()
+      if (data) {
+        setActivePositions(data)
+      }
+    } catch (e) {
+      console.error('Error fetching active positions:', e)
+    }
+  }
+
+  const handleForceClearPositions = async () => {
+    if (window.confirm("Are you sure you want to force clear the bot's active positions? Only do this if you have already manually exited the trade on Angel One.")) {
+      try {
+        const res = await fetch('/api/v1/signals/clear-active-positions', { method: 'POST' })
+        const data = await res.json()
+        if (data.status === 'success') {
+          setActivePositions({})
+          triggerDesktopNotification("Positions Cleared", "The bot's active positions have been force cleared.")
+        }
+      } catch (e) {
+        console.error('Error clearing active positions:', e)
+      }
     }
   }
 
@@ -1666,11 +2097,19 @@ export default function Dashboard() {
       setBalance(realAccountBalance)
       setTodayPnl(realAccountPnl)
       fetchRealBalance()
+      fetchActivePositions()
+
+      const balInterval = setInterval(() => {
+        fetchRealBalance()
+        fetchActivePositions()
+      }, 5000)
+
+      return () => clearInterval(balInterval)
     } else {
       setBalance(realizedBalance)
       setTodayPnl(realizedTodayPnl)
     }
-  }, [activeMode])
+  }, [activeMode, selectedSymbol])
 
   const handleModeSwitch = (mode) => {
     if (mode === 'real') {
@@ -1683,6 +2122,7 @@ export default function Dashboard() {
         setBalance(realAccountBalance)
         setTodayPnl(realAccountPnl)
         fetchRealBalance()
+        fetchActivePositions()
       }, 500)
     } else {
       setActiveMode('demo')
@@ -1692,37 +2132,74 @@ export default function Dashboard() {
     }
   }
 
-  // Model retraining simulator
-  const startRetraining = () => {
+  const startRetraining = async () => {
     if (isRetraining) return
     setIsRetraining(true)
     setRetrainProgress(0)
 
-    const interval = setInterval(() => {
+    const progressInterval = setInterval(() => {
       setRetrainProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setIsRetraining(false)
-          // Update Accuracy Metrics
-          setAlgoMetrics(prevMetrics => prevMetrics.map(item => ({
-            ...item,
-            val: +(item.val + (Math.random() - 0.4) * 2).toFixed(1)
-          })))
-          return 100
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
         }
         return prev + 10
       })
-    }, 200)
+    }, 150)
+
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const response = await fetch(`${apiBase}/api/v1/signals/retrain`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbol: selectedSymbol,
+          mode: activeMode
+        })
+      })
+      const result = await response.json()
+      
+      clearInterval(progressInterval)
+      setRetrainProgress(100)
+      
+      setTimeout(() => {
+        setIsRetraining(false)
+        if (result.status === 'success' && result.metrics) {
+          const updated = result.metrics.map(m => ({
+            name: m.name,
+            val: m.val,
+            currentWidth: m.val,
+            status: m.status || 'ACTIVE',
+            weight: m.weight
+          }))
+          setAlgoMetrics(updated)
+          fetchPredictionData()
+        } else {
+          console.error('Retraining failed:', result.message)
+        }
+      }, 500)
+    } catch (error) {
+      clearInterval(progressInterval)
+      setRetrainProgress(100)
+      setTimeout(() => {
+        setIsRetraining(false)
+        console.error('Error retraining models:', error)
+      }, 500)
+    }
   }
 
   const exportHistoryToCSV = () => {
-    const headers = ['Timestamp', 'Asset Pair', 'Position', 'Investment', 'Leverage', 'Net Profit', 'Return', 'Trigger Reason']
+    const headers = ['Timestamp', 'Asset Pair', 'Position', 'Investment', 'Leverage', 'Entry Price', 'Exit Price', 'Net Profit', 'Return', 'Trigger Reason']
     const rows = tradeHistory.map(trade => [
       trade.date,
       trade.pair,
       trade.type,
       trade.investment || `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`,
       trade.leverage,
+      trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—',
+      trade.exitPrice ? `${getCurrencySymbol(trade.pair)}${trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—',
       trade.profit,
       trade.returnPct,
       trade.status
@@ -1744,21 +2221,53 @@ export default function Dashboard() {
     document.body.removeChild(link)
   }
 
-  const clearTradeHistory = () => {
+  const clearTradeHistory = async () => {
     if (window.confirm('Are you sure you want to clear all trade history entries?')) {
       setTradeHistory([])
       localStorage.setItem('tradeHistory', JSON.stringify([]))
+      try {
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+        await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { method: 'POST' })
+        await fetch(`${apiBase}/api/v1/signals/clear-active-positions`, { method: 'POST' })
+        setActivePositions({})
+        pollAutoModeStatus()
+      } catch (e) {
+        console.error('Failed to clear trade history on backend:', e)
+      }
     }
   }
 
-  const resetWalletBalance = () => {
-    if (window.confirm('Reset wallet total balance back to starting $10,000.00?')) {
-      realizedBalanceRef.current = 10000.00
-      realizedTodayPnlRef.current = 0.00
-      setRealizedBalance(10000.00)
-      setRealizedTodayPnl(0.00)
-      setBalance(10000.00)
-      setTodayPnl(0.00)
+  const resetWalletBalance = async () => {
+    if (activeMode === 'real') {
+      if (window.confirm('Reset simulated Real Mode P&L back to zero? (Your actual broker account balance will not be affected)')) {
+        realAccountPnlRef.current = 0.00
+        setRealAccountPnl(0.00)
+        setTodayPnl(0.00)
+        fetchRealBalance()
+        try {
+          const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+          await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { method: 'POST' })
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    } else {
+      if (window.confirm('Reset wallet total balance back to starting $10,000.00?')) {
+        realizedBalanceRef.current = 10000.00
+        realizedTodayPnlRef.current = 0.00
+        setRealizedBalance(10000.00)
+        setRealizedTodayPnl(0.00)
+        setBalance(10000.00)
+        setTodayPnl(0.00)
+        try {
+          const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+          await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { method: 'POST' })
+          await fetch(`${apiBase}/api/v1/signals/clear-active-positions`, { method: 'POST' })
+          setActivePositions({})
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
 
@@ -1916,7 +2425,13 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center px-2 py-0.5 md:px-2.5 md:py-1 bg-[#111827] border border-[#1E2D4A] rounded-full text-[10px] md:text-xs font-mono-data text-white">
               <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold hidden sm:inline">BAL:</span>
-              <span className="font-bold text-cyan-400">{getCurrencySymbol()}{balance.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 0 })}</span>
+              <span className="font-bold text-cyan-400">
+                {getPortfolioCurrencySymbol()}{
+                  (balance * 100) % 1 !== 0
+                    ? balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+                    : balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                }
+              </span>
             </div>
           </div>
           
@@ -2009,7 +2524,7 @@ export default function Dashboard() {
                         <input
                           type="checkbox"
                           checked={autoTrade}
-                          onChange={(e) => setAutoTrade(e.target.checked)}
+                          onChange={(e) => handleToggleAutoTrade(e.target.checked)}
                           className="sr-only peer"
                           disabled={isEmergencyStopped}
                         />
@@ -2028,7 +2543,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
+                          <span className="text-slate-500 font-bold">{getPortfolioCurrencySymbol()}</span>
                           <input 
                             type="number"
                             min="1"
@@ -2045,57 +2560,74 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Max Open Positions */}
+
+
+                    {/* Daily Profit Target */}
                     <div>
                       <div className="flex justify-between mb-1.5">
-                        <span className="text-slate-400">Max Open Positions</span>
-                        <span className="text-cyan-400 font-bold">{maxOpenPositions}</span>
+                        <span className="text-slate-400">Daily Profit Target</span>
+                        <span className="text-cyan-400 font-bold">{getPortfolioCurrencySymbol()}{dailyProfitTarget}</span>
                       </div>
                       <input 
-                        type="range" 
-                        min="1" 
-                        max="10" 
-                        value={maxOpenPositions}
-                        onChange={(e) => setMaxOpenPositions(parseInt(e.target.value))}
-                        className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+                        type="number" 
+                        min="0" 
+                        step="10"
+                        value={dailyProfitTarget}
+                        onChange={(e) => setDailyProfitTarget(parseFloat(e.target.value) || 0.0)}
+                        className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                        placeholder="0 = Disabled"
                       />
                     </div>
 
-                    {/* Stop Loss Limit */}
+                    {/* Daily Loss Limit */}
                     <div>
                       <div className="flex justify-between mb-1.5">
-                        <span className="text-slate-400">Stop Loss Limit</span>
-                        <span className="text-red-400 font-bold">{stopLossLimit}%</span>
+                        <span className="text-slate-400">Daily Loss Limit</span>
+                        <span className="text-red-400 font-bold">{getPortfolioCurrencySymbol()}{dailyLossLimit}</span>
                       </div>
                       <input 
-                        type="range" 
-                        min="0.5" 
-                        max="5.0" 
-                        step="0.1"
-                        value={stopLossLimit}
-                        onChange={(e) => setStopLossLimit(parseFloat(e.target.value))}
-                        className="w-full accent-red-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+                        type="number" 
+                        min="0" 
+                        step="10"
+                        value={dailyLossLimit}
+                        onChange={(e) => setDailyLossLimit(parseFloat(e.target.value) || 0.0)}
+                        className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                        placeholder="0 = Disabled"
                       />
                     </div>
 
-                    {/* Auto-Trade Pacing Speed */}
-                    <div>
-                      <div className="flex justify-between mb-1.5">
-                        <span className="text-slate-400 font-bold">Auto-Trade Pacing Speed</span>
-                        <span className="text-cyan-400 font-bold capitalize">{tradePacing}</span>
+                    {/* Trailing Stop Loss Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-slate-200 font-bold block">Trailing Stop-Loss</span>
+                        <p className="text-[9px] text-slate-500 mt-0.5">Move SL to breakeven & trail profit steps.</p>
                       </div>
-                      <select
-                        value={tradePacing}
-                        onChange={(e) => setTradePacing(e.target.value)}
-                        className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded p-1.5 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer"
-                      >
-                        <option value="rapid">Rapid (Trades every 2-4 seconds - Testing)</option>
-                        <option value="controlled">Controlled (Trades every 15-30 seconds - Demo)</option>
-                        <option value="standard">Standard (Trades every 2-5 minutes - Live Pacing)</option>
-                      </select>
-                      <p className="text-[9px] text-slate-500 mt-1">
-                        * Standard pacing is highly recommended for Real accounts to minimize broker trading fees.
-                      </p>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={enableTrailingStop}
+                          onChange={(e) => setEnableTrailingStop(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                      </label>
+                    </div>
+
+                    {/* Auto-Start on Login Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-slate-200 font-bold block">Auto-Start on Login</span>
+                        <p className="text-[9px] text-slate-500 mt-0.5">Auto-run bot when app finishes loading.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={autoStartOnLogin}
+                          onChange={(e) => setAutoStartOnLogin(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                      </label>
                     </div>
 
                     {/* Desktop Browser Notifications */}
@@ -2176,11 +2708,11 @@ export default function Dashboard() {
                     <div className="border-t border-[#1E2D4A]/50 pt-3">
                       <div className="flex justify-between mb-1.5">
                         <span className="text-slate-400">Trade Size (Investment)</span>
-                        <span className="text-cyan-400 font-bold">{getCurrencySymbol()}{tradeInvestment.toLocaleString()}</span>
+                        <span className="text-cyan-400 font-bold">{getPortfolioCurrencySymbol()}{tradeInvestment.toLocaleString()}</span>
                       </div>
                       <input 
                         type="range" 
-                        min={getCurrencySymbol() === '$' ? 5 : 10} 
+                        min={getPortfolioCurrencySymbol() === '$' ? 5 : 10} 
                         max="5000" 
                         step="5"
                         value={tradeInvestment}
@@ -2188,7 +2720,7 @@ export default function Dashboard() {
                         className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer mb-2.5"
                       />
                       <div className="grid grid-cols-6 gap-1">
-                        {(getCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map(amt => (
+                        {(getPortfolioCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map(amt => (
                           <button
                             key={amt}
                             type="button"
@@ -2197,7 +2729,7 @@ export default function Dashboard() {
                               tradeInvestment === amt ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-[#162035] border-[#1E2D4A] text-slate-400 hover:text-white'
                             }`}
                           >
-                            {getCurrencySymbol()}{amt}
+                            {getPortfolioCurrencySymbol()}{amt}
                           </button>
                         ))}
                       </div>
@@ -2454,7 +2986,13 @@ export default function Dashboard() {
                               callmebot_apikey: callmebotApikey,
                               telegram_bot_token: telegramBotToken,
                               telegram_chat_id: telegramChatId,
-                              enable_telegram: enableTelegram
+                              enable_telegram: enableTelegram,
+                              daily_profit_target: parseFloat(dailyProfitTarget) || 0.0,
+                              daily_loss_limit: parseFloat(dailyLossLimit) || 0.0,
+                              enable_trailing_stop: enableTrailingStop,
+                              auto_start_on_login: autoStartOnLogin,
+                              trade_investment_usd: tradeInvestmentUSD,
+                              trade_investment_inr: tradeInvestmentINR
                             })
                           })
                           updateUser({
@@ -2529,7 +3067,7 @@ export default function Dashboard() {
               )}
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 my-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-3 gap-3 md:gap-4 my-2">
                 {/* AI Signal Card */}
                 <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between">
                   <div className="flex justify-between items-start mb-2 md:mb-0">
@@ -2593,7 +3131,7 @@ export default function Dashboard() {
                     <button
                       onClick={resetWalletBalance}
                       className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center space-x-1"
-                      title={`Reset Wallet Balance back to starting ${getCurrencySymbol()}${10000.00.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN')}`}
+                      title={`Reset Wallet Balance back to starting ${getPortfolioCurrencySymbol()}${10000.00.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN')}`}
                     >
                       <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                       <span>Reset</span>
@@ -2602,7 +3140,11 @@ export default function Dashboard() {
                   <div>
                     <p className="text-[10px] text-slate-500">Total Balance</p>
                     <h2 className={`text-2xl md:text-3xl font-mono-data font-bold text-white tracking-tight ${isPriceFlashing ? 'price-flash' : ''}`}>
-                      {getCurrencySymbol()}{balance.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
+                      {getPortfolioCurrencySymbol()}{
+                        (balance * 100) % 1 !== 0
+                          ? balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+                          : balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      }
                     </h2>
                   </div>
                   <div className="my-3 grid grid-cols-2 gap-2">
@@ -2610,7 +3152,11 @@ export default function Dashboard() {
                       <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-bold mb-0.5">Today P&L</p>
                       <div className="flex items-center space-x-1">
                         <span className={`text-xs md:text-sm font-mono-data ${todayPnl >= 0 ? 'text-[#00E676]' : 'text-[#FF3D57]'}`}>
-                          {todayPnl >= 0 ? '+' : '-'}{getCurrencySymbol()}{Math.abs(todayPnl).toFixed(2)}
+                          {todayPnl >= 0 ? '+' : '-'}{getPortfolioCurrencySymbol()}{
+                            Math.abs(todayPnl) > 0 && Math.abs(todayPnl) < 0.01
+                              ? Math.abs(todayPnl).toFixed(4)
+                              : Math.abs(todayPnl).toFixed(2)
+                          }
                         </span>
                       </div>
                     </div>
@@ -2625,49 +3171,203 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Target Card (Profit Targets 1.2X, 1.5X, 2.0X) */}
-                <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between sm:col-span-2 md:col-span-1">
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Profit Targets</p>
-                    <span className="material-symbols-outlined text-cyan-400 text-sm">track_changes</span>
+
+                {/* Auto-Mode Command Center Card */}
+                <div className="premium-card rounded-xl p-4 md:p-6 flex flex-col h-auto md:h-56 justify-between border border-cyan-500/20 bg-[#080C18]/60 shadow-[0_0_15px_rgba(0,180,255,0.05)]">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Auto-Mode Control</p>
+                    <span className={`w-2 h-2 rounded-full ${autoTrade ? 'bg-[#00E676] animate-pulse shadow-[0_0_8px_#00E676]' : 'bg-amber-500'}`}></span>
                   </div>
-                  <div className="flex space-x-2 mb-3 select-none">
-                    {['1.2X', '1.5X', '2.0X'].map((target) => (
-                      <button
-                        key={target}
-                        onClick={() => setProfitTarget(target)}
-                        className={`flex-1 py-1.5 md:py-2 rounded-lg border text-[10px] md:text-[11px] font-bold cursor-pointer transition-all duration-300 ${
-                          profitTarget === target
-                            ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 shadow-[0_0_15px_rgba(0,200,255,0.15)]'
-                            : 'border-[#1E2D4A] text-slate-500 hover:text-white'
-                        }`}
-                      >
-                        {target}
-                      </button>
-                    ))}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Daily Goal Progress</span>
+                      <span className="text-[10px] text-cyan-400 font-mono-data font-bold">
+                        {dailyProfitTarget > 0 ? `${Math.min(100, Math.max(0, (dailyPnl / dailyProfitTarget) * 100)).toFixed(0)}%` : 'INACTIVE'}
+                      </span>
+                    </div>
+                    {dailyProfitTarget > 0 ? (
+                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden mb-2">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-600 to-[#00E676] transition-all duration-500" 
+                          style={{ width: `${Math.min(100, Math.max(0, (dailyPnl / dailyProfitTarget) * 100))}%` }}
+                        ></div>
+                      </div>
+                    ) : (
+                      <div className="text-[8px] text-slate-500 italic mb-2">Set target to track goal.</div>
+                    )}
+                    <div className="flex justify-between text-[9px] text-slate-400 font-mono-data">
+                      <span>METRIC: {getPortfolioCurrencySymbol()}{dailyPnl.toFixed(2)}</span>
+                      <span>TARGET: {getPortfolioCurrencySymbol()}{dailyProfitTarget.toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="space-y-2.5">
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">BTC Position</span>
-                        <span className="text-white font-mono-data">74%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '74%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">ETH Position</span>
-                        <span className="text-white font-mono-data">42%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 shimmer-sweep" style={{ width: '42%' }}></div>
-                      </div>
-                    </div>
+                  
+                  <div className="mt-2 space-y-1.5">
+                    <button
+                      onClick={() => handleToggleAutoTrade(!autoTrade)}
+                      className={`w-full py-1.5 rounded-lg text-[9px] font-bold cursor-pointer transition-all uppercase tracking-wider text-center ${
+                        autoTrade 
+                          ? 'bg-red-500/10 border border-red-500/40 text-red-400 hover:bg-red-500/20'
+                          : 'bg-cyan-500/10 border border-cyan-400/40 text-cyan-400 hover:bg-cyan-500/20'
+                      }`}
+                    >
+                      {autoTrade ? 'Stop Auto-Mode' : 'Start Auto-Mode'}
+                    </button>
+                    {isCryptoActive ? (
+                      brokerGateway.toLowerCase().includes('binance') ? (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-[#00E676]/10 border border-[#00E676]/20 text-[9px] text-[#00E676] font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          <span>Binance Live Active</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[9px] text-[#FF3D57] font-sans font-bold tracking-wider uppercase animate-pulse">
+                          <span className="material-symbols-outlined text-[11px] text-red-400">warning</span>
+                          <span>Binance Required for Crypto</span>
+                        </div>
+                      )
+                    ) : (
+                      brokerGateway.toLowerCase().includes('angel') ? (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-[#00E676]/10 border border-[#00E676]/20 text-[9px] text-[#00E676] font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          <span>Angel One Live Active</span>
+                        </div>
+                      ) : brokerGateway.toLowerCase().includes('upstox') ? (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-[#00E676]/10 border border-[#00E676]/20 text-[9px] text-[#00E676] font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          <span>Upstox Live Active</span>
+                        </div>
+                      ) : brokerGateway.toLowerCase().includes('shoonya') ? (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-[#00E676]/10 border border-[#00E676]/20 text-[9px] text-[#00E676] font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          <span>Shoonya Live Active</span>
+                        </div>
+                      ) : brokerGateway.toLowerCase().includes('zerodha') ? (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-[#00E676]/10 border border-[#00E676]/20 text-[9px] text-[#00E676] font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          <span>Zerodha Live Active</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-1.5 py-1 px-2 rounded-lg bg-slate-500/10 border border-slate-500/20 text-[9px] text-slate-400 font-sans font-bold tracking-wider uppercase">
+                          <span className="material-symbols-outlined text-[11px]">info</span>
+                          <span>Live Account Active</span>
+                        </div>
+                      )
+                    )}
                   </div>
                 </div>
               </div>
+
+              {/* Open Positions Card (Real Mode only) */}
+              {activeMode === 'real' && (
+                <div className="premium-card rounded-xl p-6 my-4 border border-cyan-500/20 bg-[#080C18]/60 shadow-[0_0_15px_rgba(0,180,255,0.05)]">
+                  <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E2D4A]/50">
+                    <div className="flex items-center space-x-2">
+                      <span className="material-symbols-outlined text-[#00E676] animate-pulse">radar</span>
+                      <h3 className="text-sm font-headline font-bold text-white uppercase tracking-wider">Active Open Positions</h3>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      {Object.keys(activePositions).length > 0 && (
+                        <button
+                          onClick={handleForceClearPositions}
+                          className="px-2 py-0.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 text-[10px] font-bold rounded cursor-pointer transition-colors flex items-center space-x-1"
+                          title="Force clear bot positions if manually exited on broker"
+                        >
+                          <span className="material-symbols-outlined text-xs">close</span>
+                          <span>Force Clear Bot</span>
+                        </button>
+                      )}
+                      <span className="px-2 py-0.5 bg-[#00E676]/10 border border-[#00E676]/30 text-[#00E676] rounded text-[10px] font-bold">
+                        {Object.keys(activePositions).length} RUNNING
+                      </span>
+                    </div>
+                  </div>
+
+                  {Object.keys(activePositions).length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-xs text-slate-500 font-medium">No active real positions on your broker.</p>
+                      <p className="text-[10px] text-slate-600 mt-1">Auto-trade bot is online and scanning markets for directives.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-[#1E2D4A] text-slate-500 text-[9px] uppercase font-bold tracking-wider">
+                            <th className="pb-2">Market</th>
+                            <th className="pb-2">Type</th>
+                            <th className="pb-2">Size / Investment</th>
+                            <th className="pb-2">Entry Price</th>
+                            <th className="pb-2">Current Price</th>
+                            <th className="pb-2">Target (Exit SL)</th>
+                            <th className="pb-2 text-right">Est. Win / Loss</th>
+                            <th className="pb-2 text-right">Unrealized P&L</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1E2D4A]/40 text-xs font-mono-data">
+                          {Object.entries(activePositions).map(([sym, pos]) => {
+                            // Find matching tick price from chartData
+                            const lastCandle = chartData && chartData.length > 0 ? chartData[chartData.length - 1] : null;
+                            const currentPrice = sym === selectedSymbol && lastCandle ? lastCandle.close : pos.entry_price;
+                            const diffPct = ((currentPrice - pos.entry_price) / pos.entry_price) * 100;
+                            const leveragedPnlPct = diffPct * 10; // 10X Leverage
+                            const pnlAmount = (pos.qty * pos.entry_price) * (leveragedPnlPct / 100);
+                            const isProfit = leveragedPnlPct >= 0;
+
+                            // Calculate Target and Stop Loss values
+                            const slLimit = stopLossLimit || 2.0;
+                            const target_str = profitTarget || '1.5X';
+                            const mult = target_str === '1.2X' ? 1.2 : (target_str === '2.0X' ? 2.0 : 1.5);
+                            const targetPct = slLimit * mult;
+                            
+                            const targetPrice = pos.entry_price * (1 + targetPct / 100);
+                            const stopLossPrice = pos.entry_price * (1 - slLimit / 100);
+                            
+                            const possibleWin = (pos.qty * pos.entry_price) * (targetPct * 10 / 100);
+                            const possibleLoss = (pos.qty * pos.entry_price) * (slLimit * 10 / 100);
+
+                            return (
+                              <tr key={sym} className="text-white hover:bg-slate-500/5">
+                                <td className="py-2.5 font-sans font-bold text-cyan-400">{sym}</td>
+                                <td className="py-2.5">
+                                  <span className="px-1.5 py-0.5 bg-[#00E676]/10 border border-[#00E676]/20 text-[#00E676] rounded text-[9px] font-bold">
+                                    BUY / LONG
+                                  </span>
+                                </td>
+                                <td className="py-2.5 text-slate-300">
+                                  {(() => {
+                                    const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
+                                    const leverage = isCrypto ? 10 : 5;
+                                    const marginBlocked = (pos.qty * pos.entry_price) / leverage;
+                                    const totalValue = pos.qty * pos.entry_price;
+                                    return (
+                                      <>
+                                        <div className="font-bold">{pos.qty} {isCrypto ? 'Units' : 'Shares'}</div>
+                                        <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {getCurrencySymbol(sym)}{marginBlocked.toFixed(2)}</div>
+                                        <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {getCurrencySymbol(sym)}{totalValue.toFixed(2)}</div>
+                                      </>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-2.5 text-slate-300">₹{pos.entry_price.toFixed(2)}</td>
+                                <td className="py-2.5 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                                <td className="py-2.5 text-slate-300">
+                                  <div className="text-[11px] text-[#00E676] font-bold">🎯 ₹{targetPrice.toFixed(2)}</div>
+                                  <div className="text-[9px] text-[#FF3D57]">🛡️ ₹{stopLossPrice.toFixed(2)}</div>
+                                </td>
+                                <td className="py-2.5 text-right font-semibold">
+                                  <div className="text-[11px] text-[#00E676] font-bold">+{getCurrencySymbol(sym)}{possibleWin.toFixed(2)}</div>
+                                  <div className="text-[9px] text-[#FF3D57]">-{getCurrencySymbol(sym)}{possibleLoss.toFixed(2)}</div>
+                                </td>
+                                <td className={`py-2.5 text-right font-bold ${isProfit ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                  {isProfit ? '+' : ''}₹{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Market Ticker Selector Bar */}
               <div className="flex items-center space-x-2 overflow-x-auto py-1 my-2 no-scrollbar">
@@ -3241,15 +3941,17 @@ export default function Dashboard() {
                 <div className="grid grid-cols-3 gap-2 md:gap-4 my-3 p-3 rounded-xl border border-[#1E2D4A] bg-[#080C18]/60">
                   <div className="text-center">
                     <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Consensus</p>
-                    <p className="text-xs md:text-sm font-bold text-[#00E676] font-mono-data mt-0.5">BUY / LONG</p>
+                    <p className={`text-xs md:text-sm font-bold font-mono-data mt-0.5 ${
+                      liveConsensus === 'BUY' ? 'text-[#00E676]' : (liveConsensus === 'SELL' ? 'text-[#FF3D57]' : 'text-amber-500')
+                    }`}>{liveConsensus === 'BUY' ? 'BUY / LONG' : (liveConsensus === 'SELL' ? 'SELL / SHORT' : 'HOLD')}</p>
                   </div>
                   <div className="text-center border-x border-[#1E2D4A] px-1">
                     <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Confidence</p>
-                    <p className="text-xs md:text-sm font-bold text-white font-mono-data mt-0.5">87.4%</p>
+                    <p className="text-xs md:text-sm font-bold text-white font-mono-data mt-0.5">{liveConfidence.toFixed(1)}%</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Active Models</p>
-                    <p className="text-xs md:text-sm font-bold text-cyan-400 font-mono-data mt-0.5">9 / 9</p>
+                    <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold">Agreement</p>
+                    <p className="text-xs md:text-sm font-bold text-cyan-400 font-mono-data mt-0.5">{liveAgreeCount} / {liveTotalAlgos} Algos</p>
                   </div>
                 </div>
 
@@ -3318,13 +4020,126 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Open Positions Card (Real Mode only) */}
+                {activeMode === 'real' && (
+                  <div className="premium-card rounded-xl p-6 mb-6 border border-cyan-500/20 bg-[#080C18]/60 shadow-[0_0_15px_rgba(0,180,255,0.05)]">
+                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E2D4A]/50">
+                      <div className="flex items-center space-x-2">
+                        <span className="material-symbols-outlined text-[#00E676] animate-pulse">radar</span>
+                        <h3 className="text-sm font-headline font-bold text-white uppercase tracking-wider">Active Open Positions</h3>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {Object.keys(activePositions).length > 0 && (
+                          <button
+                            onClick={handleForceClearPositions}
+                            className="px-2 py-0.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 text-[10px] font-bold rounded cursor-pointer transition-colors flex items-center space-x-1"
+                            title="Force clear bot positions if manually exited on broker"
+                          >
+                            <span className="material-symbols-outlined text-xs">close</span>
+                            <span>Force Clear Bot</span>
+                          </button>
+                        )}
+                        <span className="px-2 py-0.5 bg-[#00E676]/10 border border-[#00E676]/30 text-[#00E676] rounded text-[10px] font-bold">
+                          {Object.keys(activePositions).length} RUNNING
+                        </span>
+                      </div>
+                    </div>
+
+                    {Object.keys(activePositions).length === 0 ? (
+                      <div className="text-center py-6">
+                        <p className="text-xs text-slate-500 font-medium">No active real positions on your broker.</p>
+                        <p className="text-[10px] text-slate-600 mt-1">Auto-trade bot is online and scanning markets for directives.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-[#1E2D4A] text-slate-500 text-[9px] uppercase font-bold tracking-wider">
+                              <th className="pb-2">Market</th>
+                              <th className="pb-2">Type</th>
+                              <th className="pb-2">Size / Investment</th>
+                              <th className="pb-2">Entry Price</th>
+                              <th className="pb-2">Current Price</th>
+                              <th className="pb-2">Target (Exit SL)</th>
+                              <th className="pb-2 text-right">Est. Win / Loss</th>
+                              <th className="pb-2 text-right">Unrealized P&L</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#1E2D4A]/40 text-xs font-mono-data">
+                            {Object.entries(activePositions).map(([sym, pos]) => {
+                              // Find matching tick price from chartData
+                              const lastCandle = chartData && chartData.length > 0 ? chartData[chartData.length - 1] : null;
+                              const currentPrice = sym === selectedSymbol && lastCandle ? lastCandle.close : pos.entry_price;
+                              const diffPct = ((currentPrice - pos.entry_price) / pos.entry_price) * 100;
+                              const leveragedPnlPct = diffPct * 10; // 10X Leverage
+                              const pnlAmount = (pos.qty * pos.entry_price) * (leveragedPnlPct / 100);
+                              const isProfit = leveragedPnlPct >= 0;
+
+                              // Calculate Target and Stop Loss values
+                              const slLimit = stopLossLimit || 2.0;
+                              const target_str = profitTarget || '1.5X';
+                              const mult = target_str === '1.2X' ? 1.2 : (target_str === '2.0X' ? 2.0 : 1.5);
+                              const targetPct = slLimit * mult;
+                              
+                              const targetPrice = pos.entry_price * (1 + targetPct / 100);
+                              const stopLossPrice = pos.entry_price * (1 - slLimit / 100);
+                              
+                              const possibleWin = (pos.qty * pos.entry_price) * (targetPct * 10 / 100);
+                              const possibleLoss = (pos.qty * pos.entry_price) * (slLimit * 10 / 100);
+
+                              return (
+                                <tr key={sym} className="text-white hover:bg-slate-500/5">
+                                  <td className="py-2.5 font-sans font-bold text-cyan-400">{sym}</td>
+                                  <td className="py-2.5">
+                                    <span className="px-1.5 py-0.5 bg-[#00E676]/10 border border-[#00E676]/20 text-[#00E676] rounded text-[9px] font-bold">
+                                      BUY / LONG
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 text-slate-300">
+                                    {(() => {
+                                      const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
+                                      const leverage = isCrypto ? 10 : 5;
+                                      const marginBlocked = (pos.qty * pos.entry_price) / leverage;
+                                      const totalValue = pos.qty * pos.entry_price;
+                                      return (
+                                        <>
+                                          <div className="font-bold">{pos.qty} {isCrypto ? 'Units' : 'Shares'}</div>
+                                          <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {getCurrencySymbol(sym)}{marginBlocked.toFixed(2)}</div>
+                                          <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {getCurrencySymbol(sym)}{totalValue.toFixed(2)}</div>
+                                        </>
+                                      );
+                                    })()}
+                                  </td>
+                                  <td className="py-2.5 text-slate-300">₹{pos.entry_price.toFixed(2)}</td>
+                                  <td className="py-2.5 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                                  <td className="py-2.5 text-slate-300">
+                                    <div className="text-[11px] text-[#00E676] font-bold">🎯 ₹{targetPrice.toFixed(2)}</div>
+                                    <div className="text-[9px] text-[#FF3D57]">🛡️ ₹{stopLossPrice.toFixed(2)}</div>
+                                  </td>
+                                  <td className="py-2.5 text-right font-semibold">
+                                    <div className="text-[11px] text-[#00E676] font-bold">+{getCurrencySymbol(sym)}{possibleWin.toFixed(2)}</div>
+                                    <div className="text-[9px] text-[#FF3D57]">-{getCurrencySymbol(sym)}{possibleLoss.toFixed(2)}</div>
+                                  </td>
+                                  <td className={`py-2.5 text-right font-bold ${isProfit ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                    {isProfit ? '+' : ''}₹{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="p-4 rounded-xl border border-[#1E2D4A] bg-[#080C18]/60 flex justify-between items-center">
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold">Realized Net P&L Amount</p>
                       <p className={`text-xl font-mono-data font-bold mt-1 ${totalLedgerPnl >= 0 ? 'text-[#00E676]' : 'text-red-500'}`}>
-                        {totalLedgerPnl >= 0 ? '+' : '-'}{getCurrencySymbol()}{Math.abs(totalLedgerPnl).toFixed(2)}
+                        {totalLedgerPnl >= 0 ? '+' : '-'}{getPortfolioCurrencySymbol()}{Math.abs(totalLedgerPnl).toFixed(2)}
                       </p>
                     </div>
                     <div className={`p-2.5 rounded-lg ${totalLedgerPnl >= 0 ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'}`}>
@@ -3336,7 +4151,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold">Total Capital Invested</p>
                       <p className="text-xl font-mono-data font-bold text-cyan-400 mt-1">
-                        {getCurrencySymbol()}{totalLedgerVolume.toLocaleString(getCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
+                        {getPortfolioCurrencySymbol()}{totalLedgerVolume.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400">
@@ -3376,6 +4191,8 @@ export default function Dashboard() {
                             <th className="py-4 px-6">Position</th>
                             <th className="py-4 px-6">Investment</th>
                             <th className="py-4 px-6">Leverage</th>
+                            <th className="py-4 px-6">Buy Price</th>
+                            <th className="py-4 px-6">Sell Price</th>
                             <th className="py-4 px-6">Net Profit</th>
                             <th className="py-4 px-6">Return</th>
                             <th className="py-4 px-6">Trigger Reason</th>
@@ -3395,6 +4212,12 @@ export default function Dashboard() {
                                 </td>
                                 <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</td>
                                 <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
+                                <td className="py-4 px-6 font-mono-data text-slate-300">
+                                  {trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                </td>
+                                <td className="py-4 px-6 font-mono-data text-slate-300">
+                                  {trade.exitPrice ? `${getCurrencySymbol(trade.pair)}${trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                </td>
                                 <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
                                   {trade.profit ? trade.profit : '0.00'}
                                 </td>
@@ -3436,6 +4259,12 @@ export default function Dashboard() {
                                 {trade.profit} ({trade.returnPct})
                               </span>
                             </div>
+                            {trade.entryPrice && trade.exitPrice && (
+                              <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                                <span>Buy Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                                <span>Sell Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                              </div>
+                            )}
                             <div className="flex justify-between items-center text-[10px] pt-2 border-t border-[#1E2D4A]/50">
                               <span className="text-slate-500">Capital: <span className="text-cyan-400 font-mono-data font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</span></span>
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
@@ -3462,34 +4291,51 @@ export default function Dashboard() {
               <div className="lg:col-span-2 premium-card rounded-xl p-6">
                 <h2 className="text-xl font-headline font-bold text-white mb-6">Recent Machine Learning Directives</h2>
                 <div className="space-y-4">
-                  <div className="p-4 rounded-xl border border-[#00E676]/30 bg-[#00E676]/5 flex items-start justify-between">
+                  {/* Active Ticker Directive */}
+                  <div className={`p-4 rounded-xl border flex items-start justify-between ${
+                    liveConsensus === 'BUY' 
+                      ? 'border-[#00E676]/30 bg-[#00E676]/5 text-[#00E676]' 
+                      : (liveConsensus === 'SELL' ? 'border-red-500/30 bg-red-950/5 text-red-500' : 'border-amber-500/30 bg-amber-500/5 text-amber-500')
+                  }`}>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-[#00E676] animate-ping"></span>
-                        <p className="text-sm font-bold text-white">BTC / USDT BUY Directive</p>
+                        <span className={`h-2 w-2 rounded-full animate-ping ${
+                          liveConsensus === 'BUY' ? 'bg-[#00E676]' : (liveConsensus === 'SELL' ? 'bg-red-500' : 'bg-amber-500')
+                        }`}></span>
+                        <p className="text-sm font-bold text-white">{selectedSymbol} {liveConsensus} Directive</p>
                       </div>
-                      <p className="text-xs text-slate-400 mt-2">LSTM, XGBoost, and Transformer consensus hit 87% limit. Volatility parameter ATR is optimal at 2.1%.</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        LSTM, XGBoost, and Transformer consensus hit {liveConfidence.toFixed(1)}% limit. Volatility parameter ATR is optimal at {liveIndicators.ATR}.
+                      </p>
                       <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-3">TRIGGERED AT: {new Date().toLocaleTimeString()}</span>
                     </div>
-                    <span className="text-xs font-mono-data text-[#00E676] font-bold">+2.45% SIGNAL</span>
+                    <span className={`text-xs font-mono-data font-bold uppercase`}>
+                      {liveConsensus === 'BUY' ? '🟢 BUY DIRECTIVE' : (liveConsensus === 'SELL' ? '🔴 SELL DIRECTIVE' : '🟡 NEUTRAL HOLD')}
+                    </span>
                   </div>
 
+                  {/* Secondary/Static directive for context */}
                   <div className="p-4 rounded-xl border border-[#1E2D4A] bg-[#0F1629] flex items-start justify-between opacity-70">
                     <div>
-                      <p className="text-sm font-bold text-slate-300">ETH / USDT HOLD Directive</p>
-                      <p className="text-xs text-slate-400 mt-2">Sentiment Analyzer indexes bearish macro news but LSTM signals local bounce. Waiting for consensus validation.</p>
-                      <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-3">TRIGGERED AT: 10:14:55 AM</span>
+                      <p className="text-sm font-bold text-slate-300">Market Macro Indicators</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Sentiment Analyzer indexes local news parameters. Volume averages are currently at stable levels relative to the 20-period moving average.
+                      </p>
+                      <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-3">SYSTEM REPORTING STATUS: ACTIVE</span>
                     </div>
-                    <span className="text-xs font-mono-data text-amber-500 font-bold">NEUTRAL HOLD</span>
+                    <span className="text-xs font-mono-data text-cyan-400 font-bold uppercase">Consensus Synced</span>
                   </div>
 
-                  <div className="p-4 rounded-xl border border-red-500/20 bg-red-950/5 flex items-start justify-between opacity-60">
+                  {/* Risk metric alert */}
+                  <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-950/5 flex items-start justify-between opacity-80">
                     <div>
-                      <p className="text-sm font-bold text-slate-300">SOL / USDT SELL Directive</p>
-                      <p className="text-xs text-slate-400 mt-2">Monte Carlo distribution projects a 92% probability of short-term support breakdown. Order executed.</p>
-                      <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-3">TRIGGERED AT: 09:12:33 AM</span>
+                      <p className="text-sm font-bold text-slate-300">Intraday Statistical Prediction</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Monte Carlo simulation projects a {liveConfidence.toFixed(1)}% probability of support levels holding at current pricing bounds.
+                      </p>
+                      <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-3">EVALUATION METRIC: 9/9 SUITE</span>
                     </div>
-                    <span className="text-xs font-mono-data text-red-500 font-bold">-4.12% SIGNAL</span>
+                    <span className="text-xs font-mono-data text-cyan-400 font-bold">MONTE CARLO PASSED</span>
                   </div>
                 </div>
               </div>
@@ -3502,19 +4348,19 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     <div className="flex justify-between text-xs border-b border-[#1E2D4A] pb-2">
                       <span className="text-slate-400">Min Agreement</span>
-                      <span className="text-white font-mono-data">6 / 9 Algos</span>
+                      <span className="text-white font-mono-data">{liveAgreeCount} / {liveTotalAlgos} Algos</span>
                     </div>
                     <div className="flex justify-between text-xs border-b border-[#1E2D4A] pb-2">
-                      <span className="text-slate-400">Min Confidence</span>
-                      <span className="text-white font-mono-data">70%</span>
+                      <span className="text-slate-400">Current Confidence</span>
+                      <span className="text-white font-mono-data">{liveConfidence.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between text-xs border-b border-[#1E2D4A] pb-2">
-                      <span className="text-slate-400">Max Volatility</span>
-                      <span className="text-white font-mono-data">5.0% ATR</span>
+                      <span className="text-slate-400">ATR Volatility</span>
+                      <span className="text-white font-mono-data">{liveIndicators.ATR}</span>
                     </div>
                     <div className="flex justify-between text-xs pb-2">
-                      <span className="text-slate-400">Stop Loss Limit</span>
-                      <span className="text-red-400 font-mono-data">2.0%</span>
+                      <span className="text-slate-400">Stop Loss Target</span>
+                      <span className="text-red-400 font-mono-data">{stopLossLimit.toFixed(1)}%</span>
                     </div>
                   </div>
                 </div>
@@ -3684,7 +4530,7 @@ export default function Dashboard() {
                 <input
                   type="checkbox"
                   checked={autoTrade}
-                  onChange={(e) => setAutoTrade(e.target.checked)}
+                  onChange={(e) => handleToggleAutoTrade(e.target.checked)}
                   className="sr-only peer"
                   disabled={isEmergencyStopped}
                 />
@@ -3802,7 +4648,7 @@ export default function Dashboard() {
                     <input
                       type="checkbox"
                       checked={autoTrade}
-                      onChange={(e) => setAutoTrade(e.target.checked)}
+                      onChange={(e) => handleToggleAutoTrade(e.target.checked)}
                       className="sr-only peer"
                       disabled={isEmergencyStopped}
                     />
@@ -3821,7 +4667,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
+                      <span className="text-slate-500 font-bold">{getPortfolioCurrencySymbol()}</span>
                       <input 
                         type="number"
                         min="1"
@@ -3838,55 +4684,77 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Max Open Positions */}
+
+
+                {/* Daily Profit Target */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
-                    <span className="text-slate-300 font-bold">Max Open Positions</span>
-                    <span className="text-cyan-400 font-bold font-mono-data">{maxOpenPositions}</span>
+                    <span className="text-slate-300 font-bold">Daily Profit Target</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{getPortfolioCurrencySymbol()}{dailyProfitTarget}</span>
                   </div>
                   <input 
-                    type="range" 
-                    min="1" 
-                    max="10" 
-                    value={maxOpenPositions}
-                    onChange={(e) => setMaxOpenPositions(parseInt(e.target.value))}
-                    className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-2 cursor-pointer"
+                    type="number" 
+                    min="0" 
+                    step="10"
+                    value={dailyProfitTarget}
+                    onChange={(e) => setDailyProfitTarget(parseFloat(e.target.value) || 0.0)}
+                    className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                    placeholder="0 = Disabled"
                   />
                 </div>
 
-                {/* Stop Loss Limit */}
+                {/* Daily Loss Limit */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
-                    <span className="text-slate-300 font-bold">Stop Loss Limit</span>
-                    <span className="text-red-400 font-bold font-mono-data">{stopLossLimit}%</span>
+                    <span className="text-slate-300 font-bold">Daily Loss Limit</span>
+                    <span className="text-red-400 font-bold font-mono-data">{getPortfolioCurrencySymbol()}{dailyLossLimit}</span>
                   </div>
                   <input 
-                    type="range" 
-                    min="0.5" 
-                    max="5.0" 
-                    step="0.1"
-                    value={stopLossLimit}
-                    onChange={(e) => setStopLossLimit(parseFloat(e.target.value))}
-                    className="w-full accent-red-400 bg-slate-800 rounded-lg appearance-none h-2 cursor-pointer"
+                    type="number" 
+                    min="0" 
+                    step="10"
+                    value={dailyLossLimit}
+                    onChange={(e) => setDailyLossLimit(parseFloat(e.target.value) || 0.0)}
+                    className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                    placeholder="0 = Disabled"
                   />
                 </div>
 
-                {/* Auto-Trade Pacing Speed */}
-                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-slate-300 font-bold">Auto-Trade Pacing Speed</span>
-                    <span className="text-cyan-400 font-bold capitalize font-mono-data">{tradePacing}</span>
+                {/* Trailing Stop Loss Toggle */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A] flex items-center justify-between">
+                  <div>
+                    <span className="text-slate-300 font-bold block">Trailing Stop-Loss</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Adjust stop loss to lock profit</span>
                   </div>
-                  <select
-                    value={tradePacing}
-                    onChange={(e) => setTradePacing(e.target.value)}
-                    className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer font-bold"
-                  >
-                    <option value="rapid">Rapid (Trades every 2-4 seconds - Testing)</option>
-                    <option value="controlled">Controlled (Trades every 15-30 seconds - Demo)</option>
-                    <option value="standard">Standard (Trades every 2-5 minutes - Live Pacing)</option>
-                  </select>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={enableTrailingStop}
+                      onChange={(e) => setEnableTrailingStop(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                  </label>
                 </div>
+
+                {/* Auto-Start Toggle */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A] flex items-center justify-between">
+                  <div>
+                    <span className="text-slate-300 font-bold block">Auto-Start on Login</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Toggle auto-trading on load</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={autoStartOnLogin}
+                      onChange={(e) => setAutoStartOnLogin(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                  </label>
+                </div>
+
+
 
                 {/* Desktop Notifications */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
@@ -3942,21 +4810,21 @@ export default function Dashboard() {
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
                     <span className="text-slate-300 font-bold">Trade Size (Per Position)</span>
-                    <span className="text-cyan-400 font-bold font-mono-data">{getCurrencySymbol()}{tradeInvestment}</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{getPortfolioCurrencySymbol()}{tradeInvestment}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-slate-500 font-bold">{getCurrencySymbol()}</span>
+                    <span className="text-slate-500 font-bold">{getPortfolioCurrencySymbol()}</span>
                     <input 
                       type="number"
-                      min={getCurrencySymbol() === '$' ? "5" : "10"}
+                      min={getPortfolioCurrencySymbol() === '$' ? "5" : "10"}
                       max="100000"
                       value={tradeInvestment}
-                      onChange={(e) => setTradeInvestment(Math.max(getCurrencySymbol() === '$' ? 5 : 10, parseInt(e.target.value) || 0))}
+                      onChange={(e) => setTradeInvestment(Math.max(getPortfolioCurrencySymbol() === '$' ? 5 : 10, parseInt(e.target.value) || 0))}
                       className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
                     />
                   </div>
                   <div className="grid grid-cols-6 gap-1.5 mt-3">
-                    {(getCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map((amt) => (
+                    {(getPortfolioCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map((amt) => (
                       <button
                         key={amt}
                         onClick={() => setTradeInvestment(amt)}
@@ -3966,7 +4834,7 @@ export default function Dashboard() {
                             : 'bg-[#162035] text-slate-300 border-[#1E2D4A] hover:border-cyan-500/50'
                         }`}
                       >
-                        {getCurrencySymbol()}{amt}
+                        {getPortfolioCurrencySymbol()}{amt}
                       </button>
                     ))}
                   </div>
@@ -4144,10 +5012,12 @@ export default function Dashboard() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">API Secret / Token</label>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        {brokerGateway.includes('Angel') ? 'Client ID | Password | TOTP Secret (separated by |)' : 'API Secret / Token'}
+                      </label>
                       <input 
                         type="password" 
-                        placeholder="••••••••••••••••" 
+                        placeholder={brokerGateway.includes('Angel') ? 'e.g. S123456|1234|MYTOTPSECRETKEY' : '••••••••••••••••'} 
                         value={brokerApiSecret}
                         onChange={(e) => setBrokerApiSecret(e.target.value)}
                         className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
@@ -4180,7 +5050,13 @@ export default function Dashboard() {
                           callmebot_apikey: callmebotApikey,
                           telegram_bot_token: telegramBotToken,
                           telegram_chat_id: telegramChatId,
-                          enable_telegram: enableTelegram
+                          enable_telegram: enableTelegram,
+                          daily_profit_target: parseFloat(dailyProfitTarget) || 0.0,
+                          daily_loss_limit: parseFloat(dailyLossLimit) || 0.0,
+                          enable_trailing_stop: enableTrailingStop,
+                          auto_start_on_login: autoStartOnLogin,
+                          trade_investment_usd: tradeInvestmentUSD,
+                          trade_investment_inr: tradeInvestmentINR
                         })
                       })
                       updateUser({

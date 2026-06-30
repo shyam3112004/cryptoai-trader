@@ -134,10 +134,23 @@ export const useAuthStore = create()(
         set({ user: null, token: null, error: null })
       },
 
-      setMode: (mode) => {
+      setMode: async (mode) => {
         const user = get().user
+        const token = get().token
         if (user) {
           set({ user: { ...user, mode } })
+          try {
+            await fetch(`${getApiBase()}/api/v1/auth/settings`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+              },
+              body: JSON.stringify({ active_mode: mode })
+            })
+          } catch (e) {
+            console.error('Failed to sync active_mode to backend:', e)
+          }
         }
       },
 

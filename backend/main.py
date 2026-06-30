@@ -23,7 +23,13 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE user_settings ADD COLUMN enable_telegram BOOLEAN DEFAULT 0",
                 "ALTER TABLE user_settings ADD COLUMN broker_gateway VARCHAR",
                 "ALTER TABLE user_settings ADD COLUMN broker_api_key VARCHAR",
-                "ALTER TABLE user_settings ADD COLUMN broker_api_secret VARCHAR"
+                "ALTER TABLE user_settings ADD COLUMN broker_api_secret VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN daily_profit_target FLOAT DEFAULT 0.0",
+                "ALTER TABLE user_settings ADD COLUMN daily_loss_limit FLOAT DEFAULT 0.0",
+                "ALTER TABLE user_settings ADD COLUMN enable_trailing_stop BOOLEAN DEFAULT 0",
+                "ALTER TABLE user_settings ADD COLUMN auto_start_on_login BOOLEAN DEFAULT 0",
+                "ALTER TABLE user_settings ADD COLUMN trade_investment_usd FLOAT DEFAULT 100.0",
+                "ALTER TABLE user_settings ADD COLUMN trade_investment_inr FLOAT DEFAULT 10000.0"
             ]
             for sql in migrations:
                 try:
