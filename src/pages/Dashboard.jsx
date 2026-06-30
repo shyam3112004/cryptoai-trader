@@ -224,6 +224,18 @@ export default function Dashboard() {
   const autoTradeRef = useRef(autoTrade)
 
   useEffect(() => {
+    const gateway = localStorage.getItem('brokerGateway')
+    if (gateway && gateway.toLowerCase().includes('alpaca')) {
+      localStorage.removeItem('brokerGateway')
+      localStorage.removeItem('brokerApiKey')
+      localStorage.removeItem('brokerApiSecret')
+      setBrokerGateway('Angel One SmartAPI (100% FREE Lifetime Access)')
+      setBrokerApiKey('FREE_SMARTAPI_LIVE_KEY_9482')
+      setBrokerApiSecret('FREE_SMARTAPI_SECRET_7710')
+    }
+  }, [])
+
+  useEffect(() => {
     localStorage.setItem('maxOpenPositions', maxOpenPositions)
     maxOpenPositionsRef.current = maxOpenPositions
   }, [maxOpenPositions])
@@ -1241,13 +1253,6 @@ export default function Dashboard() {
                   `🟢 BUY EXECUTED: ${currentSym}`,
                   `10X Long entry position opened at ${symb}${newClose.toLocaleString()}`
                 )
-                if (activeModeRef.current === 'real') {
-                  fetch('/api/v1/signals/execute-order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: currentSym, side: 'buy', qty: 1.0 })
-                  }).catch(e => console.error('Execute buy order error:', e))
-                }
               }
             } else {
               // Position is open, calculate active unrealized P&L
@@ -1354,13 +1359,6 @@ export default function Dashboard() {
                   finalPnl >= 0 ? `🎯 TARGET HIT: ${currentSym}` : `⚠️ STOP LOSS: ${currentSym}`,
                   `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${newClose.toLocaleString()}`
                 )
-                if (activeModeRef.current === 'real') {
-                  fetch('/api/v1/signals/execute-order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: currentSym, side: 'sell', qty: 1.0 })
-                  }).catch(e => console.error('Execute sell order error:', e))
-                }
 
                 // Close the position
                 costBasisRef.current = null
@@ -2402,7 +2400,6 @@ export default function Dashboard() {
                             <option value="Angel One SmartAPI (100% FREE Lifetime Access)">Angel One SmartAPI (100% FREE Lifetime)</option>
                             <option value="Shoonya by Finvasia (100% FREE & Zero Brokerage)">Shoonya Finvasia (100% FREE & Zero Commission)</option>
                             <option value="Upstox v2 API (Free Developer Tier)">Upstox v2 API (Free Tier)</option>
-                            <option value="Alpaca Trading API (US Stocks & Crypto)">Alpaca Trading API (US Stocks & Crypto)</option>
                             <option value="Zerodha Kite Connect API">Zerodha Kite Connect (Paid Credits)</option>
                           </select>
                         </div>
@@ -4133,7 +4130,6 @@ export default function Dashboard() {
                         <option value="Angel One SmartAPI (100% FREE Lifetime Access)">Angel One SmartAPI (100% FREE Lifetime)</option>
                         <option value="Shoonya by Finvasia (100% FREE & Zero Brokerage)">Shoonya Finvasia (100% FREE & Zero Commission)</option>
                         <option value="Upstox v2 API (Free Developer Tier)">Upstox v2 API (Free Tier)</option>
-                        <option value="Alpaca Trading API (US Stocks & Crypto)">Alpaca Trading API (US Stocks & Crypto)</option>
                         <option value="Zerodha Kite Connect API">Zerodha Kite Connect (Paid Credits)</option>
                       </select>
                     </div>

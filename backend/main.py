@@ -30,6 +30,12 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text(sql))
                 except Exception:
                     pass # Already exists
+            
+            # Wipe any legacy Alpaca settings from user settings for safety and privacy
+            try:
+                await conn.execute(text("UPDATE user_settings SET broker_gateway = '', broker_api_key = '', broker_api_secret = '' WHERE broker_gateway LIKE '%Alpaca%';"))
+            except Exception:
+                pass
     except Exception as e:
         print(f"Database initialization failed: {e}")
         
