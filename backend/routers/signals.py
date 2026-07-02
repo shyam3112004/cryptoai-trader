@@ -22,13 +22,15 @@ router = APIRouter(prefix="/signals", tags=["Signals & Prices"])
 
 DEMO_CANDLES_CACHE = {}
 
-def get_demo_candles(symbol: str) -> list:
+def get_demo_candles(symbol: str, interval_seconds: float = 60.0) -> list:
     config = get_symbol_config(symbol)
     base_price = config["basePrice"]
     mult = config["mult"]
     
     if symbol not in DEMO_CANDLES_CACHE or len(DEMO_CANDLES_CACHE[symbol]) < 50:
         candles = []
+        import time
+        now_ts = time.time()
         for i in range(50):
             angle = (i / 15) * 3.14159
             trend = math.sin(angle) * (mult * 3.0)
@@ -38,6 +40,7 @@ def get_demo_candles(symbol: str) -> list:
                 "high": round(close_price + random.random() * (mult * 0.1), 2),
                 "low": round(close_price - random.random() * (mult * 0.1), 2),
                 "close": round(close_price, 2),
+                "timestamp": now_ts - (49 - i) * interval_seconds,
                 "time": i
             })
         DEMO_CANDLES_CACHE[symbol] = candles
@@ -404,11 +407,11 @@ def train_models(symbol, candles):
     }
     return model_state
 
-def predict_consensus(symbol, candles):
+def predict_consensus(symbol, candles, strategies=None):
     if len(candles) < 30:
         return "HOLD", 50, 0, 5, {
             "RSI": 50.0, "EMA_9": candles[-1]["close"], "EMA_21": candles[-1]["close"], "VWAP": candles[-1]["close"], "ATR": "2.1%"
-        }
+        }, None
         
     ema9_list, ema21_list, rsi_list, macd_hist_list, vwap_list, bb_bands_list, avg_vol = compute_all_indicators(candles)
     latest_idx = len(candles) - 1
@@ -505,8 +508,51 @@ def predict_consensus(symbol, candles):
     else:
         mc_vote = 0.0
         
-    votes = [lstm_vote, xgb_vote, trans_vote, sent_vote, mc_vote]
-    weights = [0.25, 0.20, 0.20, 0.15, 0.20]
+    atr = calculate_atr(candles)
+    indicators = {
+        "RSI": round(rsi_list[-1], 2),
+        "EMA_9": round(ema9_list[-1], 2),
+        "EMA_21": round(ema21_list[-1], 2),
+        "VWAP": round(vwap_list[-1], 2),
+        "ATR": f"{round((atr / close) * 100.0, 2)}%" if close > 0 else "2.1%",
+        "close": close
+    }
+
+    # Evaluate Strategy Knowledge Voter
+    strategy_vote = 0.0
+    matched_strategy_id = None
+    if strategies:
+        from services.strategy_matcher import evaluate_strategy
+        buy_votes = 0
+        sell_votes = 0
+        for strat in strategies:
+            try:
+                rules_list = json.loads(strat.rules)
+            except:
+                continue
+            res = evaluate_strategy(rules_list, indicators)
+            if res == "BUY":
+                buy_votes += 1
+                if matched_strategy_id is None:
+                    matched_strategy_id = strat.id
+            elif res == "SELL":
+                sell_votes += 1
+                if matched_strategy_id is None:
+                    matched_strategy_id = strat.id
+        if buy_votes > sell_votes:
+            strategy_vote = 1.0
+        elif sell_votes > buy_votes:
+            strategy_vote = -1.0
+
+    if strategies:
+        votes = [lstm_vote, xgb_vote, trans_vote, sent_vote, mc_vote, strategy_vote]
+        weights = [0.20, 0.15, 0.15, 0.10, 0.15, 0.25]
+        total_algos = 6
+    else:
+        votes = [lstm_vote, xgb_vote, trans_vote, sent_vote, mc_vote]
+        weights = [0.25, 0.20, 0.20, 0.15, 0.20]
+        total_algos = 5
+
     weighted_score = sum(v * w for v, w in zip(votes, weights))
     
     if weighted_score > 0.05:
@@ -518,39 +564,48 @@ def predict_consensus(symbol, candles):
         
     winning_sign = 1.0 if consensus == "BUY" else (-1.0 if consensus == "SELL" else 0.0)
     agree_count = sum(1 for v in votes if v == winning_sign or (winning_sign == 0.0 and v == 0.0))
-    total_algos = 5
     
     conf_percentage = int(50 + 50 * abs(weighted_score))
     if consensus == "HOLD":
         conf_percentage = int(50 + 10 * (1 - abs(weighted_score)))
     conf_percentage = max(55, min(97, conf_percentage))
     
-    atr = calculate_atr(candles)
-    indicators = {
-        "RSI": round(rsi_list[-1], 2),
-        "EMA_9": round(ema9_list[-1], 2),
-        "EMA_21": round(ema21_list[-1], 2),
-        "VWAP": round(vwap_list[-1], 2),
-        "ATR": f"{round((atr / close) * 100.0, 2)}%" if close > 0 else "2.1%"
-    }
-    return consensus, conf_percentage, agree_count, total_algos, indicators
+    return consensus, conf_percentage, agree_count, total_algos, indicators, matched_strategy_id
 
-async def calculate_technical_signal(symbol: str, mode: str = "demo") -> str:
+async def calculate_technical_signal(symbol: str, mode: str = "demo") -> tuple:
     try:
+        from database import AsyncSessionLocal
+        from models import User, AIKnowledge, UserSetting
+        from sqlalchemy import select
+        
+        strategies = []
+        ai_candle_interval = "30s"
+        async with AsyncSessionLocal() as session:
+            user_res = await session.execute(select(User).limit(1))
+            user = user_res.scalars().first()
+            if user:
+                res_strat = await session.execute(select(AIKnowledge).where(AIKnowledge.user_id == user.id))
+                strategies = res_strat.scalars().all()
+                res_set = await session.execute(select(UserSetting).filter(UserSetting.user_id == user.id))
+                setting = res_set.scalars().first()
+                if setting:
+                    ai_candle_interval = setting.ai_candle_interval or "30s"
+                    
         if mode == "demo":
-            candles = get_demo_candles(symbol)
+            cooldown_seconds = parse_interval_to_seconds(ai_candle_interval)
+            candles = get_demo_candles(symbol, cooldown_seconds)
         else:
             res = await get_chart_data(symbol, timeframe="1m")
             candles = res.get("candles", [])
             
         if len(candles) < 30:
-            return "HOLD"
+            return "HOLD", None, {}
             
-        consensus, _, _, _, _ = predict_consensus(symbol, candles)
-        return consensus
+        consensus, _, _, _, indicators, matched_strategy_id = predict_consensus(symbol, candles, strategies)
+        return consensus, matched_strategy_id, indicators
     except Exception as e:
-        print(f"Error calculating technical signal: {e}")
-        return "HOLD"
+        print(f"[calculate_technical_signal Error] {e}")
+        return "HOLD", None, {}
 
 async def get_daily_realized_pnl(session: AsyncSession, user_id: str, investment: float = 100.0) -> float:
     try:
@@ -567,11 +622,11 @@ async def get_daily_realized_pnl(session: AsyncSession, user_id: str, investment
         
         total_pnl = 0.0
         for t in trades:
-            pct_str = t.return_pct.replace(" ", "")
-            num_str = re.sub(r'[^\d\.\-]', '', pct_str)
+            profit_str = t.profit.replace(" ", "")
+            num_str = re.sub(r'[^\d\.\-]', '', profit_str)
             try:
-                ret_pct = float(num_str)
-                total_pnl += (ret_pct / 100.0) * investment
+                val = float(num_str)
+                total_pnl += val
             except ValueError:
                 pass
         return total_pnl
@@ -579,7 +634,7 @@ async def get_daily_realized_pnl(session: AsyncSession, user_id: str, investment
         print(f"Error reading daily PnL from database: {e}")
         return 0.0
 
-async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_val: float, return_pct_val: float, status: str, is_crypto: bool, entry_price: float = None, exit_price: float = None):
+async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_val: float, return_pct_val: float, status: str, is_crypto: bool, entry_price: float = None, exit_price: float = None, highest_price: float = None, strategy_id: int = None, quantity: float = 1.0):
     try:
         async with AsyncSession(engine) as session:
             user_result = await session.execute(select(User).limit(1))
@@ -607,15 +662,21 @@ async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_v
                 status=status,
                 entry_price=entry_price,
                 exit_price=exit_price,
+                highest_price=highest_price,
+                strategy_id=strategy_id,
+                quantity=quantity,
                 date=datetime.utcnow()
             )
             session.add(new_trade)
             await session.commit()
-            print(f"[DATABASE] Saved trade history for {pair}: PnL = {profit_str}, Return = {pct_str}")
+            print(f"[DATABASE] Saved trade history for {pair}: PnL = {profit_str.replace('₹', 'INR')}, Return = {pct_str}")
     except Exception as e:
         print(f"[DATABASE ERROR] Failed to save trade history: {e}")
 
 GLOBAL_ACTIVE_TRADES = {}
+GLOBAL_PRICE_CACHE = {}
+GLOBAL_AI_GATING_COOLDOWNS = {}
+GLOBAL_AI_EXIT_COOLDOWNS = {}
 GLOBAL_AUTO_TRADE_ENABLED = False
 
 def save_bot_state():
@@ -704,6 +765,12 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+def get_symbol_currency(symbol: str) -> str:
+    upper = str(symbol or "").upper()
+    if "USDT" in upper or "BTC" in upper or "ETH" in upper or "SOL" in upper or "ADA" in upper or "USD" in upper:
+        return "$"
+    return "₹"
+
 def get_symbol_config(symbol: str):
     s = str(symbol or "").upper()
     if "NIFTY" in s: return {"basePrice": 24052.95, "mult": 8.0}
@@ -748,6 +815,7 @@ YAHOO_SYMBOL_MAP = {
     "WIPRO": "WIPRO.NS",
     "YESBANK": "YESBANK.NS",
     "IDEA": "IDEA.NS",
+    "RPOWER": "RPOWER.NS",
     "BTC/USDT": "BTC-USD",
     "ETH/USDT": "ETH-USD",
     "SOL/USDT": "SOL-USD",
@@ -772,11 +840,166 @@ YAHOO_INTERVAL_MAP = {
 
 @router.get("/chart-data")
 async def get_chart_data(symbol: str = "NIFTY 50", timeframe: str = "15m"):
-    """Fetch real historical OHLCV data from Yahoo Finance as a proxy."""
+    """Fetch real historical OHLCV data from Binance, Angel One, or Yahoo Finance."""
     import httpx
+    from datetime import datetime, timedelta
 
-    # Map our symbol to Yahoo Finance ticker
     sym_upper = symbol.upper().replace("/", "").replace(" ", "").strip()
+    
+    # ─── 1. BINANCE CRYPTO FLOW ───
+    if "USDT" in sym_upper:
+        try:
+            # Map timeframe to Binance interval
+            binance_interval = "15m"
+            if timeframe.endswith("s"):
+                binance_interval = "1m"
+            elif timeframe.endswith("m") or timeframe.endswith("h") or timeframe.endswith("d"):
+                binance_interval = timeframe
+            
+            binance_sym = sym_upper
+            url = "https://api.binance.com/api/v3/klines"
+            params = {
+                "symbol": binance_sym,
+                "interval": binance_interval,
+                "limit": 100
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(url, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candles = []
+                    for i, c in enumerate(data):
+                        candles.append({
+                            "time": i,
+                            "timestamp": int(c[0]), # already ms epoch
+                            "open": float(c[1]),
+                            "high": float(c[2]),
+                            "low": float(c[3]),
+                            "close": float(c[4]),
+                            "vol": float(c[5])
+                        })
+                    return {"candles": candles, "symbol": binance_sym, "count": len(candles)}
+        except Exception as binance_err:
+            print(f"[Binance Chart Fetch Error] {binance_err}")
+            
+    # ─── 2. ANGEL ONE STOCKS/ETFS FLOW ───
+    else:
+        try:
+            user_info = await query_user_info()
+            api_key = user_info.get("api_key")
+            api_secret = user_info.get("api_secret")
+            
+            if api_key and api_secret:
+                mapping = ANGEL_ONE_TOKEN_MAP.get(sym_upper)
+                if not mapping:
+                    for key, val in ANGEL_ONE_TOKEN_MAP.items():
+                        if key in sym_upper or sym_upper in key:
+                            mapping = val
+                            break
+                            
+                if mapping:
+                    token, tradingsymbol = mapping
+                    jwt = await get_angel_one_jwt(api_key, api_secret)
+                    
+                    if jwt:
+                        # Map interval for Angel One
+                        angel_interval = "FIFTEEN_MINUTE"
+                        delta_days = 7
+                        
+                        # Handle timeframe suffixes
+                        num_part = "".join([c for c in timeframe if c.isdigit()])
+                        unit_part = "".join([c for c in timeframe if not c.isdigit()]).lower()
+                        
+                        if num_part:
+                            val = int(num_part)
+                            if unit_part == "s" or (unit_part == "m" and val <= 1):
+                                angel_interval = "ONE_MINUTE"
+                                delta_days = 2
+                            elif unit_part == "m":
+                                if val <= 5:
+                                    angel_interval = "FIVE_MINUTE"
+                                    delta_days = 3
+                                elif val <= 15:
+                                    angel_interval = "FIFTEEN_MINUTE"
+                                    delta_days = 7
+                                else:
+                                    angel_interval = "THIRTY_MINUTE"
+                                    delta_days = 15
+                            elif unit_part == "h":
+                                angel_interval = "ONE_HOUR"
+                                delta_days = 30
+                            elif unit_part == "d":
+                                angel_interval = "ONE_DAY"
+                                delta_days = 180
+                        else:
+                            if timeframe == "1d":
+                                angel_interval = "ONE_DAY"
+                                delta_days = 180
+                            elif timeframe == "1h":
+                                angel_interval = "ONE_HOUR"
+                                delta_days = 30
+                            elif timeframe == "5m":
+                                angel_interval = "FIVE_MINUTE"
+                                delta_days = 3
+                            elif timeframe == "1s" or timeframe == "1m":
+                                angel_interval = "ONE_MINUTE"
+                                delta_days = 2
+                        
+                        now = datetime.now()
+                        from_date = (now - timedelta(days=delta_days)).strftime("%Y-%m-%d 09:15")
+                        to_date = now.strftime("%Y-%m-%d %H:%M")
+                        
+                        url = "https://apiconnect.angelone.in/rest/secure/angelbroking/historical/v1/getCandle"
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": f"Bearer {jwt}",
+                            "X-PrivateKey": api_key,
+                            "X-UserType": "USER",
+                            "X-SourceID": "WEB",
+                            "X-ClientLocalIP": "192.168.1.1",
+                            "X-ClientPublicIP": "1.1.1.1",
+                            "X-MACaddress": "02:00:00:00:00:00"
+                        }
+                        payload = {
+                            "exchange": "NSE",
+                            "symboltoken": token,
+                            "interval": angel_interval,
+                            "fromdate": from_date,
+                            "todate": to_date
+                        }
+                        
+                        transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
+                        async with httpx.AsyncClient(transport=transport, timeout=10.0) as client:
+                            resp = await client.post(url, headers=headers, json=payload)
+                            res_json = resp.json()
+                            if res_json.get("status") is True:
+                                data = res_json.get("data", [])
+                                candles = []
+                                for i, c in enumerate(data):
+                                    # Parse datetime "2021-02-15T09:15:00+05:30"
+                                    try:
+                                        ts_str = c[0].split("+")[0]
+                                        dt = datetime.fromisoformat(ts_str)
+                                        ts_ms = int(dt.timestamp() * 1000)
+                                    except Exception:
+                                        ts_ms = int(datetime.now().timestamp() * 1000) - (len(data) - i) * 60000
+                                        
+                                    candles.append({
+                                        "time": i,
+                                        "timestamp": ts_ms,
+                                        "open": float(c[1]),
+                                        "high": float(c[2]),
+                                        "low": float(c[3]),
+                                        "close": float(c[4]),
+                                        "vol": int(c[5])
+                                    })
+                                return {"candles": candles, "symbol": tradingsymbol, "count": len(candles)}
+        except Exception as angel_err:
+            print(f"[Angel One Chart Fetch Error] {angel_err}")
+
+    # ─── 3. YAHOO FINANCE FALLBACK ───
+    # Map our symbol to Yahoo Finance ticker
     yahoo_ticker = None
     for key, val in YAHOO_SYMBOL_MAP.items():
         norm_key = key.replace("/", "").replace(" ", "").upper()
@@ -786,7 +1009,34 @@ async def get_chart_data(symbol: str = "NIFTY 50", timeframe: str = "15m"):
     if not yahoo_ticker:
         yahoo_ticker = sym_upper  # fallback: use as-is
 
-    interval, range_val = YAHOO_INTERVAL_MAP.get(timeframe, ("15m", "15d"))
+    interval, range_val = YAHOO_INTERVAL_MAP.get(timeframe, (None, None))
+    if not interval:
+        # Parse custom timeframe string (e.g., "10m", "2h", "30s")
+        num_part = "".join([c for c in timeframe if c.isdigit()])
+        unit_part = "".join([c for c in timeframe if not c.isdigit()]).lower()
+        if num_part:
+            val = int(num_part)
+            if unit_part == "s":
+                interval, range_val = "1m", "1d"
+            elif unit_part == "m":
+                if val <= 2:
+                    interval, range_val = "1m", "1d"
+                elif val <= 5:
+                    interval, range_val = "5m", "5d"
+                elif val <= 15:
+                    interval, range_val = "15m", "15d"
+                elif val <= 30:
+                    interval, range_val = "30m", "30d"
+                else:
+                    interval, range_val = "60m", "30d"
+            elif unit_part == "h":
+                interval, range_val = "1h", "60d"
+            elif unit_part == "d":
+                interval, range_val = "1d", "1y"
+            else:
+                interval, range_val = "15m", "15d"
+        else:
+            interval, range_val = "15m", "15d"
 
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}"
     params = {
@@ -1130,6 +1380,10 @@ async def query_user_info() -> dict:
                 auto_start_on_login = setting.auto_start_on_login if setting else False
                 trade_investment_usd = setting.trade_investment_usd if setting else 100.0
                 trade_investment_inr = setting.trade_investment_inr if setting else 10000.0
+                trade_shares = setting.trade_shares if setting else 1.0
+                trade_direction = setting.trade_direction if setting else "BOTH"
+                ai_candle_interval = setting.ai_candle_interval if setting else "30s"
+                ai_consultation_mode = setting.ai_consultation_mode if setting else "anomaly"
                 
                 return {
                     "phone": phone,
@@ -1150,7 +1404,11 @@ async def query_user_info() -> dict:
                     "enable_trailing_stop": bool(enable_trailing_stop),
                     "auto_start_on_login": bool(auto_start_on_login),
                     "trade_investment_usd": trade_investment_usd,
-                    "trade_investment_inr": trade_investment_inr
+                    "trade_investment_inr": trade_investment_inr,
+                    "trade_shares": trade_shares,
+                    "trade_direction": trade_direction,
+                    "ai_candle_interval": ai_candle_interval,
+                    "ai_consultation_mode": ai_consultation_mode
                 }
     except Exception as e:
         print(f"Error querying user info: {e}")
@@ -1171,7 +1429,8 @@ async def query_user_info() -> dict:
         "daily_profit_target": 0.0,
         "daily_loss_limit": 0.0,
         "enable_trailing_stop": False,
-        "auto_start_on_login": False
+        "auto_start_on_login": False,
+        "trade_shares": 1.0
     }
 
 async def execute_binance_real_order(symbol: str, side: str, quantity: float, api_key: str, api_secret: str):
@@ -1390,7 +1649,9 @@ ANGEL_ONE_TOKEN_MAP = {
     "IDEA": ("14366", "IDEA-EQ"),
     "IDEA.NS": ("14366", "IDEA-EQ"),
     "YESBANK": ("11915", "YESBANK-EQ"),
-    "YESBANK.NS": ("11915", "YESBANK-EQ")
+    "YESBANK.NS": ("11915", "YESBANK-EQ"),
+    "RPOWER": ("15259", "RPOWER-EQ"),
+    "RPOWER.NS": ("15259", "RPOWER-EQ")
 }
 
 async def execute_angel_one_real_order(symbol: str, side: str, quantity: float, api_key: str, api_secret: str):
@@ -1636,10 +1897,11 @@ async def stream_binance_klines():
                                 mode=mode
                             )
                             
+                            curr = get_symbol_currency(symbol)
                             frontend_notification = {
                                 "type": "notification",
                                 "title": f"🟢 {'REAL ' if mode == 'real' else ''}BUY ORDER EXECUTED",
-                                "body": f"{'REAL Order ' if mode == 'real' else ''}Bought {symbol} at ${close_price:,.2f}. Confidence: 91%. Target: +4.0%, SL: -2.0%.",
+                                "body": f"{'REAL Order ' if mode == 'real' else ''}Bought {symbol} at {curr}{close_price:,.2f}. Confidence: 91%. Target: +4.0%, SL: -2.0%.",
                                 "timestamp": datetime.now().strftime("%H:%M:%S"),
                                 "symbol": symbol,
                                 "entry_price": close_price,
@@ -1671,6 +1933,7 @@ async def stream_binance_klines():
                             
                             # Calculate exact mathematical leveraged return percentage (10X leverage)
                             pnl_pct = price_diff_pct * 10 * 100
+                            curr = get_symbol_currency(symbol)
                             
                             if pnl_pct >= 0:
                                 whatsapp_service.notify_sell_target(
@@ -1686,7 +1949,7 @@ async def stream_binance_klines():
                                 frontend_notification = {
                                     "type": "notification",
                                     "title": f"🎯 {'REAL ' if mode == 'real' else ''}PROFIT TARGET HIT",
-                                    "body": f"{'REAL Order ' if mode == 'real' else ''}Sold {symbol} at ${exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!",
+                                    "body": f"{'REAL Order ' if mode == 'real' else ''}Sold {symbol} at {curr}{exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!",
                                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     "symbol": symbol,
                                     "entry_price": entry_price,
@@ -1709,7 +1972,7 @@ async def stream_binance_klines():
                                 frontend_notification = {
                                     "type": "notification",
                                     "title": f"🔴 {'REAL ' if mode == 'real' else ''}STOP LOSS TRIPPED",
-                                    "body": f"{'REAL Order ' if mode == 'real' else ''}Sold {symbol} at ${exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%.",
+                                    "body": f"{'REAL Order ' if mode == 'real' else ''}Sold {symbol} at {curr}{exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%.",
                                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     "symbol": symbol,
                                     "entry_price": entry_price,
@@ -1789,10 +2052,11 @@ async def simulate_stock_ticks():
                             mode="demo"
                         )
                         
+                        curr = get_symbol_currency(symbol)
                         frontend_notification = {
                             "type": "notification",
                             "title": f"🟢 BUY ORDER EXECUTED",
-                            "body": f"Bought {symbol} at ${close_price:,.2f}. Confidence: 92%. Target: +4.0%, SL: -2.0%.",
+                            "body": f"Bought {symbol} at {curr}{close_price:,.2f}. Confidence: 92%. Target: +4.0%, SL: -2.0%.",
                             "timestamp": datetime.now().strftime("%H:%M:%S"),
                             "symbol": symbol,
                             "entry_price": close_price,
@@ -1816,6 +2080,7 @@ async def simulate_stock_ticks():
                         
                         # Calculate exact mathematical leveraged return percentage (10X leverage)
                         pnl_pct = price_diff_pct * 10 * 100
+                        curr = get_symbol_currency(symbol)
                         
                         if pnl_pct >= 0:
                             whatsapp_service.notify_sell_target(
@@ -1831,7 +2096,7 @@ async def simulate_stock_ticks():
                             frontend_notification = {
                                 "type": "notification",
                                 "title": f"🎯 PROFIT TARGET HIT",
-                                "body": f"Sold {symbol} at ${exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!",
+                                "body": f"Sold {symbol} at {curr}{exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!",
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "symbol": symbol,
                                 "entry_price": entry_price,
@@ -1854,7 +2119,7 @@ async def simulate_stock_ticks():
                             frontend_notification = {
                                 "type": "notification",
                                 "title": f"🔴 STOP LOSS TRIPPED",
-                                "body": f"Sold {symbol} at ${exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%.",
+                                "body": f"Sold {symbol} at {curr}{exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%.",
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "symbol": symbol,
                                 "entry_price": entry_price,
@@ -1874,9 +2139,9 @@ async def simulate_stock_ticks():
             await asyncio.sleep(5)
 
 async def simulate_live_ticks():
-    global GLOBAL_AUTO_TRADE_ENABLED
+    global GLOBAL_AUTO_TRADE_ENABLED, GLOBAL_PRICE_CACHE
     import os
-    price_cache = {}
+    price_cache = GLOBAL_PRICE_CACHE
     active_trades = {}
     cooldowns = {}
     
@@ -1893,7 +2158,12 @@ async def simulate_live_ticks():
                             "qty": v["qty"],
                             "mode": v.get("mode", "demo"),
                             "timestamp": v.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                            "breakeven_active": v.get("breakeven_active", False)
+                            "breakeven_active": v.get("breakeven_active", False),
+                            "direction": v.get("direction", "LONG"),
+                            "target_price": v.get("target_price"),
+                            "stop_loss_price": v.get("stop_loss_price"),
+                            "strategy_id": v.get("strategy_id"),
+                            "investment_scale": v.get("investment_scale", 1.0)
                         }
                     print(f"[PERSISTENCE] Restored active trades from active_trades.json: {active_trades}")
         except Exception as e:
@@ -1949,10 +2219,20 @@ async def simulate_live_ticks():
                                 await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                     except Exception as sync_err:
                         print(f"[AUTO-SYNC ERROR] Failed to sync with Angel One: {sync_err}")
-            # Get all symbols that currently have active client connections
-            active_symbols = set(manager.active_connections.values())
+            # Get all symbols that currently have active client connections plus default list
+            default_symbols = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+            active_symbols = set(manager.active_connections.values()) | set(default_symbols) | set(active_trades.keys())
             
             for symbol in active_symbols:
+                # Normalize active trades keys to match format being iterated
+                norm_sym = symbol.upper().replace("/", "").replace(" ", "").strip()
+                matched_trade_symbol = None
+                for active_sym in active_trades.keys():
+                    if active_sym.upper().replace("/", "").replace(" ", "").strip() == norm_sym:
+                        matched_trade_symbol = active_sym
+                        break
+                has_active_trade = matched_trade_symbol is not None
+
                 config = get_symbol_config(symbol)
                 if symbol not in price_cache:
                     try:
@@ -1965,6 +2245,10 @@ async def simulate_live_ticks():
                     except Exception as e:
                         print(f"[LIVE TICKER] Failed to get live Yahoo Finance price for {symbol}: {e}. Falling back to base price.")
                         price_cache[symbol] = config["basePrice"]
+                    
+                    # Sync normalized key
+                    norm_sym = symbol.upper().replace("/", "").replace(" ", "").strip()
+                    price_cache[norm_sym] = price_cache[symbol]
                 
                 # Periodically sync with actual exchange price to prevent random walk drift
                 if sync_tick % 5 == 0:
@@ -1986,6 +2270,8 @@ async def simulate_live_ticks():
                                 
                         if real_price > 0.0:
                             price_cache[symbol] = real_price
+                            norm_sym = symbol.upper().replace("/", "").replace(" ", "").strip()
+                            price_cache[norm_sym] = real_price
                             print(f"[PRICE-SYNC] Synchronized {symbol} price to actual: {real_price}")
                     except Exception as sync_price_err:
                         print(f"[PRICE-SYNC ERROR] Failed to sync price for {symbol}: {sync_price_err}")
@@ -1995,10 +2281,16 @@ async def simulate_live_ticks():
                 mode = user_info.get("mode", "demo")
 
                 # Check technical signal indicators (EMA & RSI) first to apply trend-following bias
-                tech_signal = await calculate_technical_signal(symbol, mode)
+                if has_active_trade or symbol in manager.active_connections.values():
+                    tech_signal, matched_strategy_id, indicators_val = await calculate_technical_signal(symbol, mode)
+                    print(f"[simulate_live_ticks] Symbol={symbol} Price={price_cache.get(symbol)} Signal={tech_signal}")
+                else:
+                    tech_signal = "HOLD"
+                    matched_strategy_id = None
+                    indicators_val = {}
 
                 # Simulate small price fluctuation with trend-following drift
-                drift = 0.48
+                drift = 0.50
                 if tech_signal == "BUY":
                     drift = 0.44  # Slightly biased to move UP
                 elif tech_signal == "SELL":
@@ -2008,27 +2300,47 @@ async def simulate_live_ticks():
                 price_cache[symbol] += change
                 close_price = round(price_cache[symbol], 2)
                 
-                # Push the new tick close price as a new candle in Demo Mode
+                # Sync normalized symbol key in price_cache
+                norm_sym = symbol.upper().replace("/", "").replace(" ", "").strip()
+                price_cache[norm_sym] = close_price
+                
+                # Push the new tick close price to Demo Mode Candles Cache
+                is_final_tick = False
                 if mode == "demo":
-                    candles = get_demo_candles(symbol)
-                    new_candle = {
-                        "open": round(close_price - change * 0.5, 2),
-                        "high": round(max(close_price, close_price + abs(change) * 0.8), 2),
-                        "low": round(min(close_price, close_price - abs(change) * 0.8), 2),
-                        "close": close_price,
-                        "time": len(candles)
-                    }
-                    candles.append(new_candle)
+                    cooldown_seconds = parse_interval_to_seconds(user_info.get("ai_candle_interval", "30s"))
+                    candles = get_demo_candles(symbol, cooldown_seconds)
+                    import time
+                    now_ts = time.time()
+                    
+                    last_candle = candles[-1]
+                    last_candle_timestamp = last_candle.get("timestamp", now_ts)
+                    
+                    if now_ts - last_candle_timestamp >= cooldown_seconds:
+                        is_final_tick = True
+                        new_candle = {
+                            "open": last_candle["close"],
+                            "high": close_price,
+                            "low": close_price,
+                            "close": close_price,
+                            "timestamp": now_ts,
+                            "time": len(candles)
+                        }
+                        candles.append(new_candle)
+                    else:
+                        last_candle["close"] = close_price
+                        last_candle["high"] = round(max(last_candle["high"], close_price), 2)
+                        last_candle["low"] = round(min(last_candle["low"], close_price), 2)
+                        
                     DEMO_CANDLES_CACHE[symbol] = candles[-100:]
                 
                 price_update = {
                     "type": "price_tick",
-                    "open": round(close_price - change * 0.5, 2),
+                    "open": candles[-1]["open"] if mode == "demo" else round(close_price - change * 0.5, 2),
                     "close": close_price,
-                    "high": round(max(close_price, close_price + abs(change) * 0.8), 2),
-                    "low": round(min(close_price, close_price - abs(change) * 0.8), 2),
+                    "high": candles[-1]["high"] if mode == "demo" else round(max(close_price, close_price + abs(change) * 0.8), 2),
+                    "low": candles[-1]["low"] if mode == "demo" else round(min(close_price, close_price - abs(change) * 0.8), 2),
                     "vol": random.randint(100, 1500),
-                    "isFinal": False,
+                    "isFinal": is_final_tick,
                     "symbol": symbol,
                     "market_closed": False
                 }
@@ -2036,27 +2348,22 @@ async def simulate_live_ticks():
                 # Broadcast this tick to all clients subscribed to this symbol
                 await manager.broadcast_tick(symbol, json.dumps(price_update))
                 
-                # Fetch current settings to get trade pacing parameters
-                user_info = await query_user_info()
-                pacing = user_info.get("trade_pacing", "rapid")
-                if pacing == "controlled":
-                    entry_chance, exit_chance, cooldown_ticks = 0.45, 0.30, 6
-                elif pacing == "standard":
-                    entry_chance, exit_chance, cooldown_ticks = 0.15, 0.08, 30
-                else: # rapid
-                    entry_chance, exit_chance, cooldown_ticks = 0.95, 0.50, 1
+                # If symbol is not active/traded, skip entry/exit logic!
+                if not has_active_trade and symbol not in manager.active_connections.values():
+                    continue
 
-                # Auto-trade simulation logic on the backend for this tick
-                if symbol in cooldowns and cooldowns[symbol] > 0:
-                    cooldowns[symbol] -= 1
-                elif symbol not in active_trades:
+                # Fetch current settings
+                user_info = await query_user_info()
+
+                # Auto-trade logic — NO cooldown delays, NO time restrictions
+                # Trades enter purely on signal quality and exit ONLY on target/stop
+                if not has_active_trade:
                     # Do not open new trades if auto-trade is disabled
                     if not GLOBAL_AUTO_TRADE_ENABLED:
                         continue
                         
-                    # 1. Enforce max open positions limit
-                    max_positions = user_info.get("max_open_positions", 3)
-                    if len(active_trades) >= max_positions:
+                    # 1. Enforce strict single position limit globally
+                    if len(active_trades) >= 1:
                         continue
 
                     # 2. Enforce Daily Profit Target & Daily Loss Limit (Auto-Stop)
@@ -2113,34 +2420,169 @@ async def simulate_live_ticks():
                                 await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                                 continue
 
-                    # 3. Check technical signal indicators (reusing early calculation)
-                    if tech_signal != "BUY":
+                    # 3. Check technical signal indicators — bypass if AI Consultation Mode is 'every_trade'
+                    is_every_candle = user_info.get("ai_consultation_mode") == "every_trade"
+                    
+                    if not is_every_candle and tech_signal not in ["BUY", "SELL"]:
                         continue
 
-                    # Entry check based on pacing
-                    if random.random() < entry_chance:
+                    # Determine initial potential direction or PREDICT mode
+                    if is_every_candle:
+                        direction = "PREDICT"
+                    else:
+                        direction = "LONG" if tech_signal == "BUY" else "SHORT"
+
+                    # Filter based on trade_direction settings (if direction is already known)
+                    allowed_direction = user_info.get("trade_direction", "BOTH")
+                    if direction == "LONG" and allowed_direction == "SHORT_ONLY":
+                        continue
+                    if direction == "SHORT" and allowed_direction == "LONG_ONLY":
+                        continue
+
+                    entry_side = "BUY" if direction == "LONG" else "SELL"
+                    
+                    # Cooldown mechanism: only consult AI once every candle timeframe interval
+                    now = datetime.now()
+                    last_consult = GLOBAL_AI_GATING_COOLDOWNS.get(symbol)
+                    cooldown_seconds = parse_interval_to_seconds(user_info.get("ai_candle_interval", "30s"))
+                    if last_consult and (now - last_consult).total_seconds() < cooldown_seconds:
+                        continue
+
+                    # Mark last consult time to prevent immediate recheck
+                    GLOBAL_AI_GATING_COOLDOWNS[symbol] = now
+                    
+                    # Broadcast "AI Analyzing..." notification to frontend
+                    frontend_notification = {
+                        "type": "notification",
+                        "title": f"🧠 AI ANALYZING {direction} ENTRY",
+                        "body": f"Analyzing market conditions for {symbol} {direction} entry signal...",
+                        "timestamp": now.strftime("%H:%M:%S"),
+                        "symbol": symbol,
+                        "action": "AI_ANALYZING"
+                    }
+                    await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
+                    
+                    # Get recent news feed
+                    from services.ai_intelligence_service import ai_intelligence_service
+                    news_items = []
+                    try:
+                        news_items = await ai_intelligence_service.fetch_news_feed(symbol)
+                    except Exception as news_err:
+                        print(f"[AI GATING NEWS ERROR] {news_err}")
+
+                    # Consult AI Brain (Claude / Simulated engine)
+                    try:
+                        from database import AsyncSessionLocal
+                        from models import UserSetting
+                        cl_key = None
+                        cl_model = None
+                        async with AsyncSessionLocal() as session:
+                            stmt_set = select(UserSetting).limit(1)
+                            res_set = await session.execute(stmt_set)
+                            settings_row = res_set.scalar_one_or_none()
+                            if settings_row:
+                                cl_key = settings_row.claude_api_key
+                                cl_model = settings_row.claude_model
+                                # Check daily budget limit
+                                from services.ai_knowledge_base import get_ai_summary_stats
+                                stats = await get_ai_summary_stats(session, settings_row.user_id)
+                                budget_limit = settings_row.ai_daily_budget or 5.0
+                                if stats["today_cost_usd"] >= budget_limit and cl_key and "FREE" not in cl_key:
+                                    print(f"[AI GATING] Budget of ${budget_limit:.2f} reached. Falling back to local rules.")
+                                    cl_key = None
+
+                        ai_decision = await ai_intelligence_service.analyze_trade_opportunity(
+                            symbol=symbol,
+                            direction=direction,
+                            indicators=indicators_val,
+                            close_price=close_price,
+                            news_items=news_items,
+                            api_key=cl_key,
+                            model=cl_model
+                        )
+                    except Exception as ai_err:
+                        print(f"[AI GATING ERROR] {ai_err}. Falling back to default parameters.")
+                        ai_decision = {
+                            "decision": "APPROVE",
+                            "confidence": 80,
+                            "profit_target_pct": None,
+                            "position_pct": 30.0,
+                            "reasoning": "Fallback approval due to analysis exception."
+                        }
+
+                    # Resolve PREDICT decision into specific LONG/SHORT direction
+                    ai_decision_val = ai_decision.get("decision")
+                    if direction == "PREDICT":
+                        if ai_decision_val == "LONG":
+                            direction = "LONG"
+                            ai_decision["decision"] = "APPROVE"
+                        elif ai_decision_val == "SHORT":
+                            direction = "SHORT"
+                            ai_decision["decision"] = "APPROVE"
+                        else:
+                            # Treat HOLD or anything else as REJECT
+                            ai_decision["decision"] = "REJECT"
+                            ai_decision["reasoning"] = ai_decision.get("reasoning", "AI decided to HOLD (no entry).")
+                            
+                    # Filter based on allowed trade direction after AI makes prediction!
+                    if direction in ["LONG", "SHORT"]:
+                        if allowed_direction == "LONG_ONLY" and direction != "LONG":
+                            ai_decision["decision"] = "REJECT"
+                            ai_decision["reasoning"] = "Predicted SHORT but settings only allow LONG trades."
+                        if allowed_direction == "SHORT_ONLY" and direction != "SHORT":
+                            ai_decision["decision"] = "REJECT"
+                            ai_decision["reasoning"] = "Predicted LONG but settings only allow SHORT trades."
+
+                    entry_side = "BUY" if direction == "LONG" else "SELL"
+
+                    # Handle REJECT
+                    if ai_decision.get("decision") == "REJECT":
+                        frontend_notification = {
+                            "type": "notification",
+                            "title": f"🧠 AI ENTRY REJECTED ({direction})",
+                            "body": f"AI Brain rejected {symbol} {direction} entry. Reason: {ai_decision.get('reasoning')}",
+                            "timestamp": now.strftime("%H:%M:%S"),
+                            "symbol": symbol,
+                            "action": "AI_REJECTED"
+                        }
+                        await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
+                        continue
+
+                    # Handle APPROVE
+                    ai_reasoning = ai_decision.get("reasoning", "Approved by AI Brain.")
+                    ai_tp_override = ai_decision.get("profit_target_pct") # dynamic profit target percentage
+                    ai_pos_pct = ai_decision.get("position_pct", 30.0) # e.g. 30.0%
+                    investment_scale = ai_pos_pct / 30.0 # scale factor relative to default 30%
+                    
+                    frontend_notification = {
+                        "type": "notification",
+                        "title": f"🧠 AI ENTRY APPROVED ({direction})",
+                        "body": f"AI Brain approved {symbol} {direction} entry. Reason: {ai_reasoning}",
+                        "timestamp": now.strftime("%H:%M:%S"),
+                        "symbol": symbol,
+                        "action": "AI_APPROVED"
+                    }
+                    await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
+
+                    # Enter trade immediately — approved by AI Brain
+                    if True:
                         mode = user_info.get("mode", "demo")
                         api_key = user_info.get("api_key")
                         api_secret = user_info.get("api_secret")
                         gateway = user_info.get("gateway", "")
                         
-                        # Calculate quantity dynamically based on balance if in real mode
-                        trade_qty = 1.0
-                        if mode == "real":
-                            if "BTC" in symbol or "ETH" in symbol or "SOL" in symbol or "ADA" in symbol:
-                                trade_qty = 0.001 if "BTC" in symbol else 0.01
-                            else:
-                                try:
-                                    bal_info = await get_account_balance()
-                                    balance = bal_info.get("balance", 0.0)
-                                    if balance > 0 and close_price > 0:
-                                        # Max quantity affordable with balance under 10X leverage
-                                        trade_qty = float(int((balance * 4.5) // close_price))
-                                        if trade_qty < 1.0:
-                                            trade_qty = 1.0
-                                except Exception as e:
-                                    print(f"[REAL TRADING QTY WARNING] Failed to compute qty: {e}")
-                                    trade_qty = 1.0
+                        # Set trade entry quantity based on the user's trade_shares setting
+                        user_shares = float(user_info.get("trade_shares", 1.0))
+                        is_crypto = "BTC" in symbol or "ETH" in symbol or "SOL" in symbol or "ADA" in symbol
+                        
+                        # Scale based on AI's position percentage scaling
+                        scaled_qty = user_shares * investment_scale
+                        if is_crypto:
+                            trade_qty = round(scaled_qty, 4)
+                            if trade_qty <= 0:
+                                trade_qty = 0.0001 if "BTC" in symbol else (0.001 if "ETH" in symbol else 0.01)
+                        else:
+                            trade_qty = float(max(1, int(round(scaled_qty))))
                         
                         # Execute real order on Binance/Angel/Upstox if REAL mode is active
                         order_success = True
@@ -2148,56 +2590,116 @@ async def simulate_live_ticks():
                         
                         if mode == "real":
                             if "BTC" in symbol or "ETH" in symbol or "SOL" in symbol or "ADA" in symbol:
-                                res = await execute_binance_real_order(symbol, "BUY", trade_qty, api_key, api_secret)
+                                res = await execute_binance_real_order(symbol, entry_side, trade_qty, api_key, api_secret)
                                 order_success = bool(res and "orderId" in res)
                                 if not order_success:
                                     reject_reason = res.get("msg", res.get("error", "Invalid API key or credentials"))
                             elif gateway and "Upstox" in gateway:
-                                res = await execute_upstox_real_order(symbol, "BUY", trade_qty, api_secret)
+                                res = await execute_upstox_real_order(symbol, entry_side, trade_qty, api_secret)
                                 order_success = bool(res and res.get("status") == "success")
                                 if not order_success:
                                     reject_reason = res.get("errors", [{}])[0].get("message", "Upstox order rejected")
                             elif gateway and "Angel" in gateway:
-                                res = await execute_angel_one_real_order(symbol, "BUY", trade_qty, api_key, api_secret)
+                                res = await execute_angel_one_real_order(symbol, entry_side, trade_qty, api_key, api_secret)
                                 order_success = bool(res and res.get("status") is True)
                                 if not order_success:
                                     reject_reason = res.get("message", "Angel One order rejected")
                                     
                         if order_success:
+                            # Calculate target and stop loss price at entry
+                            sl_limit_val = user_info.get("stop_loss_limit", 2.0)
+                            stop_unleveraged_val = -sl_limit_val / 100.0
+                            
+                            # Use AI target override if specified, otherwise fallback to default formula
+                            if ai_tp_override is not None:
+                                target_unleveraged_val = ai_tp_override
+                            else:
+                                target_str_val = user_info.get("profit_target", "1.5X")
+                                mult_val = 1.2 if target_str_val == "1.2X" else (2.0 if target_str_val == "2.0X" else 1.5)
+                                target_unleveraged_val = (sl_limit_val * mult_val) / 100.0
+                            
+                            if matched_strategy_id:
+                                try:
+                                    import sqlite3
+                                    conn_lite = sqlite3.connect("cryptoai.db")
+                                    cursor_lite = conn_lite.cursor()
+                                    cursor_lite.execute("SELECT rules FROM ai_knowledge WHERE id = ?", (matched_strategy_id,))
+                                    row_lite = cursor_lite.fetchone()
+                                    if row_lite and row_lite[0]:
+                                        import json as py_json
+                                        rules_list = py_json.loads(row_lite[0])
+                                        from services.strategy_matcher import parse_sl_tp_ratios
+                                        custom_sl, custom_tp = parse_sl_tp_ratios(rules_list)
+                                        if custom_sl is not None:
+                                            stop_unleveraged_val = -custom_sl
+                                        if custom_tp is not None:
+                                            target_unleveraged_val = custom_tp
+                                    conn_lite.close()
+                                except Exception as parse_err:
+                                    print(f"[Auto-Trade Custom SL/TP Parse Error at Entry] {parse_err}")
+                                    
+                            if direction == "LONG":
+                                target_price_val = close_price * (1.0 + target_unleveraged_val)
+                                stop_loss_price_val = close_price * (1.0 + stop_unleveraged_val)
+                            else:
+                                target_price_val = close_price * (1.0 - target_unleveraged_val)
+                                stop_loss_price_val = close_price * (1.0 - stop_unleveraged_val)
+                                
                             active_trades[symbol] = {
                                 "price": close_price,
                                 "qty": trade_qty,
                                 "mode": mode,
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "strategy_id": matched_strategy_id,
+                                "direction": direction,
+                                "target_price": target_price_val,
+                                "stop_loss_price": stop_loss_price_val,
+                                "investment_scale": investment_scale
                             }
                             GLOBAL_ACTIVE_TRADES[symbol] = {
                                 "entry_price": close_price,
                                 "qty": trade_qty,
                                 "mode": mode,
                                 "timestamp": active_trades[symbol]["timestamp"],
-                                "breakeven_active": False
+                                "breakeven_active": False,
+                                "strategy_id": matched_strategy_id,
+                                "direction": direction,
+                                "target_price": target_price_val,
+                                "stop_loss_price": stop_loss_price_val,
+                                "investment_scale": investment_scale
                             }
+                            print(f"[AUTO-TRADE] Entered {direction} position on {symbol} at price {close_price} (Target: {target_price_val:.2f}, Stop: {stop_loss_price_val:.2f})")
                             try:
                                 with open("active_trades.json", "w") as f:
                                     json.dump(active_trades, f)
                             except Exception as e:
                                 print(f"[PERSISTENCE] Error saving active trades: {e}")
                             
+                            curr = get_symbol_currency(symbol)
+                            if direction == "LONG":
+                                title = f"🟢 {'REAL ' if mode == 'real' else ''}BUY ORDER EXECUTED"
+                                body = f"{'REAL Order ' if mode == 'real' else ''}Bought {trade_qty} {symbol} at {curr}{close_price:,.2f}. Confidence: 92%."
+                            else:
+                                title = f"🔴 {'REAL ' if mode == 'real' else ''}SHORT ORDER EXECUTED"
+                                body = f"{'REAL Order ' if mode == 'real' else ''}Shorted {trade_qty} {symbol} at {curr}{close_price:,.2f}. Confidence: 92%."
+                            
                             frontend_notification = {
                                 "type": "notification",
-                                "title": f"🟢 {'REAL ' if mode == 'real' else ''}BUY ORDER EXECUTED",
-                                "body": f"{'REAL Order ' if mode == 'real' else ''}Bought {trade_qty} {symbol} at ${close_price:,.2f}. Confidence: 92%.",
+                                "title": title,
+                                "body": body,
                                 "timestamp": datetime.now().strftime("%H:%M:%S"),
                                 "symbol": symbol,
                                 "entry_price": close_price,
-                                "action": "BUY"
+                                "action": "BUY",
+                                "direction": direction,
+                                "target_price": target_price_val
                             }
                             await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                         else:
                             # Notify the user that the real trade failed/was rejected!
                             frontend_notification = {
                                 "type": "notification",
-                                "title": f"❌ REAL BUY ORDER REJECTED",
+                                "title": f"❌ REAL {'BUY' if direction == 'LONG' else 'SHORT'} ORDER REJECTED",
                                 "body": f"Order for {trade_qty} {symbol} rejected. Reason: {reject_reason}",
                                 "timestamp": datetime.now().strftime("%H:%M:%S"),
                                 "symbol": symbol,
@@ -2206,11 +2708,29 @@ async def simulate_live_ticks():
                             }
                             await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                 else:
-                    trade_info = active_trades[symbol]
+                    trade_info = active_trades[matched_trade_symbol]
                     entry_price = trade_info["price"]
                     trade_qty = trade_info["qty"]
+                    direction = trade_info.get("direction", "LONG")
                     
-                    price_diff_pct = (close_price - entry_price) / entry_price
+                    # For every_trade mode, exit active trade at the close of each candle (cooldown expired)
+                    is_every_candle = user_info.get("ai_consultation_mode") == "every_trade"
+                    candle_close_exit = False
+                    if is_every_candle:
+                        last_consult = GLOBAL_AI_GATING_COOLDOWNS.get(symbol) or GLOBAL_AI_GATING_COOLDOWNS.get(matched_trade_symbol)
+                        if not last_consult:
+                            try:
+                                last_consult = datetime.strptime(trade_info["timestamp"], "%Y-%m-%d %H:%M:%S")
+                            except Exception:
+                                last_consult = None
+                        cooldown_seconds = parse_interval_to_seconds(user_info.get("ai_candle_interval", "30s"))
+                        now = datetime.now()
+                        if last_consult and (now - last_consult).total_seconds() >= cooldown_seconds:
+                            candle_close_exit = True
+                            print(f"[CANDLE EXIT] Time elapsed {(now - last_consult).total_seconds():.1f}s >= cooldown {cooldown_seconds}s. Triggering candle close exit.")
+                    
+                    raw_price_diff_pct = (close_price - entry_price) / entry_price
+                    price_diff_pct = raw_price_diff_pct if direction == "LONG" else -raw_price_diff_pct
                     raw_leveraged_pnl = price_diff_pct * 100 * 10
                     
                     mode = user_info.get("mode", "demo")
@@ -2223,44 +2743,199 @@ async def simulate_live_ticks():
                     target_str = user_info.get("profit_target", "1.5X")
                     mult = 1.2 if target_str == "1.2X" else (2.0 if target_str == "2.0X" else 1.5)
                     
-                    target_unleveraged = (sl_limit * mult) / 100.0  # e.g. 0.03
-                    stop_unleveraged = -sl_limit / 100.0            # e.g. -0.02
+                    target_unleveraged = (sl_limit * mult) / 100.0  # default
+                    stop_unleveraged = -sl_limit / 100.0            # default
                     
-                    highest_price = max(trade_info.get("highest_price", entry_price), close_price)
-                    trade_info["highest_price"] = highest_price
-                    if symbol in GLOBAL_ACTIVE_TRADES:
-                        GLOBAL_ACTIVE_TRADES[symbol]["highest_price"] = highest_price
+                    # Fetch strategy-specific SL/TP ratios
+                    strategy_id = trade_info.get("strategy_id")
+                    if strategy_id:
+                        try:
+                            from database import AsyncSessionLocal
+                            from models import AIKnowledge
+                            from services.strategy_matcher import parse_sl_tp_ratios
+                            
+                            # Fetch strategy details synchronously via thread/executor helper or direct session query
+                            # For simplicity and speed in tick loop, query it cleanly
+                            import sqlite3
+                            conn_lite = sqlite3.connect("cryptoai.db")
+                            cursor_lite = conn_lite.cursor()
+                            cursor_lite.execute("SELECT rules FROM ai_knowledge WHERE id = ?", (strategy_id,))
+                            row_lite = cursor_lite.fetchone()
+                            if row_lite and row_lite[0]:
+                                rules_list = json.loads(row_lite[0])
+                                custom_sl, custom_tp = parse_sl_tp_ratios(rules_list)
+                                if custom_sl is not None:
+                                    stop_unleveraged = -custom_sl
+                                    print(f"[Auto-Trade] Applied matched strategy custom SL: {custom_sl * 100:.2f}%")
+                                if custom_tp is not None:
+                                    target_unleveraged = custom_tp
+                                    print(f"[Auto-Trade] Applied matched strategy custom TP: {custom_tp * 100:.2f}%")
+                            conn_lite.close()
+                        except Exception as parse_err:
+                            print(f"[Auto-Trade Custom SL/TP Parse Error] {parse_err}")
                     
-                    # Stop loss price (starts as entry - SL)
-                    stop_loss_price = entry_price * (1.0 + stop_unleveraged)
-                    
-                    # Trailing Stop and Breakeven logic
                     enable_trailing = user_info.get("enable_trailing_stop", False)
                     breakeven_triggered = False
                     
-                    if enable_trailing:
-                        # 1. Breakeven: if profit reached 50% of target
-                        if price_diff_pct >= (target_unleveraged * 0.5):
-                            stop_loss_price = entry_price
-                            breakeven_triggered = True
-                            trade_info["breakeven_active"] = True
-                            if symbol in GLOBAL_ACTIVE_TRADES:
-                                GLOBAL_ACTIVE_TRADES[symbol]["breakeven_active"] = True
+                    if direction == "LONG":
+                        highest_price = max(trade_info.get("highest_price", entry_price), close_price)
+                        trade_info["highest_price"] = highest_price
+                        if symbol in GLOBAL_ACTIVE_TRADES:
+                            GLOBAL_ACTIVE_TRADES[symbol]["highest_price"] = highest_price
                         
-                        # 2. Trailing: if profit reached 75% of target
-                        if price_diff_pct >= (target_unleveraged * 0.75):
-                            stop_loss_price = max(stop_loss_price, highest_price * 0.99)
-                    
-                    target_hit = close_price >= (entry_price * (1.0 + target_unleveraged))
-                    stop_hit = close_price <= stop_loss_price
-                    
-                    if mode == "real":
-                        time_exit = False # No random time exit in Real mode!
+                        # Stop loss price (starts as entry - SL)
+                        stop_loss_price = trade_info.get("stop_loss_price")
+                        if stop_loss_price is None:
+                            stop_loss_price = entry_price * (1.0 + stop_unleveraged)
+                            trade_info["stop_loss_price"] = stop_loss_price
+                            if symbol in GLOBAL_ACTIVE_TRADES:
+                                GLOBAL_ACTIVE_TRADES[symbol]["stop_loss_price"] = stop_loss_price
+                        
+                        if enable_trailing:
+                            # 1. Breakeven: if profit reached 50% of target
+                            if price_diff_pct >= (target_unleveraged * 0.5):
+                                stop_loss_price = max(stop_loss_price, entry_price)
+                                breakeven_triggered = True
+                                trade_info["breakeven_active"] = True
+                                if symbol in GLOBAL_ACTIVE_TRADES:
+                                    GLOBAL_ACTIVE_TRADES[symbol]["breakeven_active"] = True
+                            
+                            # 2. Trailing: if profit reached 75% of target
+                            if price_diff_pct >= (target_unleveraged * 0.75):
+                                stop_loss_price = max(stop_loss_price, highest_price * 0.99)
+                        
+                        # Save the updated stop loss floor back to persistent trade_info
+                        trade_info["stop_loss_price"] = stop_loss_price
+                        if symbol in GLOBAL_ACTIVE_TRADES:
+                            GLOBAL_ACTIVE_TRADES[symbol]["stop_loss_price"] = stop_loss_price
+                        
+                        target_price_limit = trade_info.get("target_price")
+                        if target_price_limit is not None:
+                            target_hit = close_price >= target_price_limit
+                        else:
+                            target_hit = close_price >= (entry_price * (1.0 + target_unleveraged))
+                        stop_hit = close_price <= stop_loss_price
                     else:
-                        # Professional exit: Close when the trend indicator reverses
-                        time_exit = tech_signal == "SELL"
+                        lowest_price = min(trade_info.get("lowest_price", entry_price), close_price)
+                        trade_info["lowest_price"] = lowest_price
+                        if symbol in GLOBAL_ACTIVE_TRADES:
+                            GLOBAL_ACTIVE_TRADES[symbol]["lowest_price"] = lowest_price
+                        
+                        # Stop loss price (starts as entry + SL)
+                        stop_loss_price = trade_info.get("stop_loss_price")
+                        if stop_loss_price is None:
+                            stop_loss_price = entry_price * (1.0 - stop_unleveraged)
+                            trade_info["stop_loss_price"] = stop_loss_price
+                            if symbol in GLOBAL_ACTIVE_TRADES:
+                                GLOBAL_ACTIVE_TRADES[symbol]["stop_loss_price"] = stop_loss_price
+                        
+                        if enable_trailing:
+                            # 1. Breakeven: if profit reached 50% of target
+                            if price_diff_pct >= (target_unleveraged * 0.5):
+                                stop_loss_price = min(stop_loss_price, entry_price)
+                                breakeven_triggered = True
+                                trade_info["breakeven_active"] = True
+                                if symbol in GLOBAL_ACTIVE_TRADES:
+                                    GLOBAL_ACTIVE_TRADES[symbol]["breakeven_active"] = True
+                            
+                            # 2. Trailing: if profit reached 75% of target
+                            if price_diff_pct >= (target_unleveraged * 0.75):
+                                stop_loss_price = min(stop_loss_price, lowest_price * 1.01)
+                        
+                        # Save the updated stop loss ceiling back to persistent trade_info
+                        trade_info["stop_loss_price"] = stop_loss_price
+                        if symbol in GLOBAL_ACTIVE_TRADES:
+                            GLOBAL_ACTIVE_TRADES[symbol]["stop_loss_price"] = stop_loss_price
+                        
+                        target_price_limit = trade_info.get("target_price")
+                        if target_price_limit is not None:
+                            target_hit = close_price <= target_price_limit
+                        else:
+                            target_hit = close_price <= (entry_price * (1.0 - target_unleveraged))
+                        stop_hit = close_price >= stop_loss_price
                     
-                    if target_hit or stop_hit or time_exit:
+                    # Consult AI Brain on whether to exit active position early
+                    ai_exit_hit = False
+                    ai_exit_reason = ""
+                    
+                    now = datetime.now()
+                    last_exit_check = GLOBAL_AI_EXIT_COOLDOWNS.get(symbol)
+                    if not last_exit_check or (now - last_exit_check).total_seconds() >= 15:
+                        GLOBAL_AI_EXIT_COOLDOWNS[symbol] = now
+                        
+                        # Load technical indicators for active exit check
+                        indicators_val = {}
+                        try:
+                            candles = []
+                            try:
+                                if mode == "demo":
+                                    cooldown_seconds = parse_interval_to_seconds(user_info.get("ai_candle_interval", "30s"))
+                                    candles = get_demo_candles(symbol, cooldown_seconds)
+                                else:
+                                    res_chart = await get_chart_data(symbol, timeframe="1m")
+                                    candles = res_chart.get("candles", [])
+                            except Exception as chart_err:
+                                print(f"[AI EXIT] Error reading candles: {chart_err}")
+                            
+                            if len(candles) >= 30:
+                                ema9_list, ema21_list, rsi_list, macd_hist_list, vwap_list, bb_bands_list, avg_vol = compute_all_indicators(candles)
+                                indicators_val = {
+                                    "RSI": round(rsi_list[-1], 2) if rsi_list else 50.0,
+                                    "EMA_9": round(ema9_list[-1], 2) if ema9_list else close_price,
+                                    "EMA_21": round(ema21_list[-1], 2) if ema21_list else close_price,
+                                    "VWAP": round(vwap_list[-1], 2) if vwap_list else close_price,
+                                    "ATR": "2.0%"
+                                }
+                            else:
+                                indicators_val = {"RSI": 50.0, "EMA_9": close_price, "EMA_21": close_price, "VWAP": close_price, "ATR": "2.0%"}
+                        except Exception as ind_err:
+                            print(f"[AI EXIT] Indicators error: {ind_err}")
+                            indicators_val = {"RSI": 50.0, "EMA_9": close_price, "EMA_21": close_price, "VWAP": close_price, "ATR": "2.0%"}
+                            
+                        # Load recent news
+                        news_items = []
+                        try:
+                            from services.ai_intelligence_service import ai_intelligence_service
+                            news_items = await ai_intelligence_service.fetch_news_feed(symbol)
+                        except Exception as news_err:
+                            print(f"[AI EXIT] News load error: {news_err}")
+                            
+                        # Fetch API credentials
+                        cl_key = None
+                        cl_model = None
+                        try:
+                            from database import AsyncSessionLocal
+                            from models import UserSetting
+                            async with AsyncSessionLocal() as session:
+                                stmt_set = select(UserSetting).limit(1)
+                                res_set = await session.execute(stmt_set)
+                                settings_row = res_set.scalar_one_or_none()
+                                if settings_row:
+                                    cl_key = settings_row.claude_api_key
+                                    cl_model = settings_row.claude_model
+                        except Exception as creds_err:
+                            print(f"[AI EXIT] Credentials fetch error: {creds_err}")
+                            
+                        # Call exit analysis
+                        try:
+                            from services.ai_intelligence_service import ai_intelligence_service
+                            ai_exit_decision = await ai_intelligence_service.analyze_active_trade_exit(
+                                symbol=symbol,
+                                direction=direction,
+                                entry_price=entry_price,
+                                current_price=close_price,
+                                indicators=indicators_val,
+                                news_items=news_items,
+                                api_key=cl_key,
+                                model=cl_model
+                            )
+                            if ai_exit_decision.get("decision") == "EXIT":
+                                ai_exit_hit = True
+                                ai_exit_reason = ai_exit_decision.get("reasoning", "AI Brain suggested early exit.")
+                        except Exception as ai_exit_err:
+                            print(f"[AI EXIT ERROR] {ai_exit_err}")
+                            
+                    if target_hit or stop_hit or ai_exit_hit or candle_close_exit:
                         exit_price = close_price
                         
                         # Calculate exact mathematical leveraged return percentage (10X leverage)
@@ -2268,61 +2943,125 @@ async def simulate_live_ticks():
                         
                         # Unleveraged returns
                         is_crypto = "USDT" in symbol.upper() or "BTC" in symbol.upper() or "ETH" in symbol.upper() or "SOL" in symbol.upper() or "ADA" in symbol.upper()
-                        # Calculate actual leveraged PnL in currency units
-                        # Leverage is 10X
-                        if mode == "demo":
-                            investment = user_info.get("trade_investment_usd", 100.0) if is_crypto else user_info.get("trade_investment_inr", 10000.0)
-                            profit_val = (pnl_pct / 100.0) * investment
-                        else:
-                            profit_val = (pnl_pct / 100.0) * trade_qty * entry_price
+                        # Calculate actual leveraged P&L based on shares quantity and 10X leverage
+                        margin_blocked = (trade_qty * entry_price) / 10.0
+                        profit_val = (pnl_pct / 100.0) * margin_blocked
                         
+                        exit_side = "SELL" if direction == "LONG" else "BUY"
                         # Execute real order on Binance/Angel/Upstox if REAL mode is active
                         if mode == "real":
                             if is_crypto:
-                                asyncio.create_task(execute_binance_real_order(symbol, "SELL", trade_qty, api_key, api_secret))
+                                asyncio.create_task(execute_binance_real_order(symbol, exit_side, trade_qty, api_key, api_secret))
                             elif gateway and "Upstox" in gateway:
-                                asyncio.create_task(execute_upstox_real_order(symbol, "SELL", trade_qty, api_secret))
+                                asyncio.create_task(execute_upstox_real_order(symbol, exit_side, trade_qty, api_secret))
                             elif gateway and "Angel" in gateway:
-                                asyncio.create_task(execute_angel_one_real_order(symbol, "SELL", trade_qty, api_key, api_secret))
+                                asyncio.create_task(execute_angel_one_real_order(symbol, exit_side, trade_qty, api_key, api_secret))
                         
-                        status_str = "TARGET HIT" if pnl_pct >= 0 else "STOP LOSS"
-                        if not target_hit and not stop_hit:
-                            status_str = "MANUAL"
+                        if candle_close_exit:
+                            status_str = "CANDLE CLOSE"
+                        elif ai_exit_hit:
+                            status_str = "AI DYNAMIC EXIT"
+                        else:
+                            status_str = "TARGET HIT" if pnl_pct >= 0 else "STOP LOSS"
+                            if not target_hit and not stop_hit:
+                                status_str = "MANUAL"
                             
                         # Save completed trade to database for permanent ledger tracking!
+                        exit_highest_or_lowest = highest_price if direction == "LONG" else lowest_price
                         asyncio.create_task(save_trade_history(
                             pair=symbol,
-                            trade_type="LONG",
+                            trade_type=direction,
                             leverage="10X",
                             profit_val=profit_val,
                             return_pct_val=pnl_pct,
                             status=status_str,
                             is_crypto=is_crypto,
                             entry_price=entry_price,
-                            exit_price=exit_price
+                            exit_price=exit_price,
+                            highest_price=exit_highest_or_lowest,
+                            strategy_id=strategy_id,
+                            quantity=trade_qty
                         ))
+
+                        # Update strategy confidence based on trade result (feedback loop)
+                        if strategy_id:
+                            async def update_strategy_confidence(strat_id, pnl):
+                                try:
+                                    import sqlite3
+                                    conn_up = sqlite3.connect("cryptoai.db")
+                                    cursor_up = conn_up.cursor()
+                                    cursor_up.execute("SELECT confidence FROM ai_knowledge WHERE id = ?", (strat_id,))
+                                    row_up = cursor_up.fetchone()
+                                    if row_up:
+                                        old_conf = row_up[0] or 85.0
+                                        # Win adds +2%, loss subtracts -3%
+                                        if pnl >= 0:
+                                            new_conf = min(97.0, old_conf + 2.0)
+                                        else:
+                                            new_conf = max(50.0, old_conf - 3.0)
+                                        cursor_up.execute("UPDATE ai_knowledge SET confidence = ? WHERE id = ?", (new_conf, strat_id))
+                                        conn_up.commit()
+                                        print(f"[Strategy Feedback] Updated strategy ID {strat_id} confidence from {old_conf}% to {new_conf}% based on trade return of {pnl:.2f}%")
+                                    conn_up.close()
+                                except Exception as feedback_err:
+                                    print(f"[Strategy Feedback Error] Failed to update confidence: {feedback_err}")
+                            asyncio.create_task(update_strategy_confidence(strategy_id, pnl_pct))
+                        
+                        # Trigger post-trade targeted learning (self-healing AI)
+                        # This searches YouTube for better strategies in the area that just failed
+                        if strategy_id:
+                            from services.autonomous_learner import trigger_post_trade_learning
+                            asyncio.create_task(trigger_post_trade_learning(strategy_id, status_str, pnl_pct))
+                        
+                        curr = get_symbol_currency(symbol)
+                        verb = "Sold" if direction == "LONG" else "Covered"
+                        if candle_close_exit:
+                            title_str = f"⌛ {'REAL ' if mode == 'real' else ''}CANDLE INTERVAL CLOSED"
+                            body_str = f"{'REAL Order ' if mode == 'real' else ''}{verb} {trade_qty} {symbol} at {curr}{exit_price:,.2f} on candle close (Return: {pnl_pct:+.2f}%)"
+                        elif ai_exit_hit:
+                            title_str = f"🧠 {'REAL ' if mode == 'real' else ''}AI DYNAMIC EXIT EXECUTED"
+                            body_str = f"{'REAL Order ' if mode == 'real' else ''}{verb} {trade_qty} {symbol} at {curr}{exit_price:,.2f} via AI control. Reason: {ai_exit_reason} (Return: {pnl_pct:+.2f}%)"
+                        else:
+                            title_str = f"🎯 {'REAL ' if mode == 'real' else ''}PROFIT TARGET HIT" if pnl_pct >= 0 else f"🔴 {'REAL ' if mode == 'real' else ''}STOP LOSS TRIPPED"
+                            if pnl_pct >= 0:
+                                body_str = f"{'REAL Order ' if mode == 'real' else ''}{verb} {trade_qty} {symbol} at {curr}{exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!"
+                            else:
+                                body_str = f"{'REAL Order ' if mode == 'real' else ''}{verb} {trade_qty} {symbol} at {curr}{exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%."
                         
                         frontend_notification = {
                             "type": "notification",
-                            "title": f"🎯 {'REAL ' if mode == 'real' else ''}PROFIT TARGET HIT" if pnl_pct >= 0 else f"🔴 {'REAL ' if mode == 'real' else ''}STOP LOSS TRIPPED",
-                            "body": f"{'REAL Order ' if mode == 'real' else ''}Sold {trade_qty} {symbol} at ${exit_price:,.2f}. Net profit: +{pnl_pct:.2f}%!" if pnl_pct >= 0 else f"{'REAL Order ' if mode == 'real' else ''}Sold {trade_qty} {symbol} at ${exit_price:,.2f}. Closed at loss: {pnl_pct:.2f}%.",
+                            "title": title_str,
+                            "body": body_str,
                             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "symbol": symbol,
                             "entry_price": entry_price,
                             "exit_price": exit_price,
                             "pnl_pct": pnl_pct,
-                            "action": "CLOSE"
+                            "action": "CLOSE",
+                            "direction": direction,
+                            "highest_price": exit_highest_or_lowest
                         }
                         await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                         
-                        del active_trades[symbol]
-                        GLOBAL_ACTIVE_TRADES.pop(symbol, None)
+                        # Trigger AI Auto-Consultation for anomaly/exits with strategy details
+                        if status_str == "STOP LOSS":
+                            asyncio.create_task(trigger_ai_anomaly_consultation(symbol, "stop_loss_hit", f"Stop loss triggered at exit price {curr}{exit_price:,.2f} causing a loss of {pnl_pct:.2f}%", strategy_id))
+                        elif status_str == "TARGET HIT":
+                            asyncio.create_task(trigger_ai_anomaly_consultation(symbol, "target_hit", f"Take profit target hit at exit price {curr}{exit_price:,.2f} giving a profit of {pnl_pct:.2f}%", strategy_id))
+                        elif status_str == "AI DYNAMIC EXIT":
+                            asyncio.create_task(trigger_ai_anomaly_consultation(symbol, "ai_dynamic_exit", f"AI Brain executed dynamic exit early at {curr}{exit_price:,.2f} with return {pnl_pct:.2f}%. Reason: {ai_exit_reason}", strategy_id))
+                        
+                        del active_trades[matched_trade_symbol]
+                        GLOBAL_ACTIVE_TRADES.pop(matched_trade_symbol, None)
                         try:
                             with open("active_trades.json", "w") as f:
                                 json.dump(active_trades, f)
                         except Exception as e:
                             print(f"[PERSISTENCE] Error saving active trades: {e}")
-                        cooldowns[symbol] = cooldown_ticks
+                        
+                        # Prevent immediate re-entry on the same candle block
+                        GLOBAL_AI_GATING_COOLDOWNS[symbol] = datetime.now()
+                        print(f"[AUTO-TRADE] Position exited for {symbol}. Entry gating cooldown activated.")
             
             await asyncio.sleep(1)
         except Exception as e:
@@ -2351,6 +3090,80 @@ async def websocket_endpoint(websocket: WebSocket):
 @router.get("/active-positions")
 async def get_active_positions():
     return GLOBAL_ACTIVE_TRADES
+
+@router.get("/trade-history")
+async def get_trade_history():
+    from database import AsyncSessionLocal, engine
+    from models import TradeHistory, User
+    from sqlalchemy import select
+    async with AsyncSessionLocal() as session:
+        user_res = await session.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        if not user:
+            return []
+        
+        stmt = select(TradeHistory).where(TradeHistory.user_id == user.id).order_by(TradeHistory.date.desc())
+        res = await session.execute(stmt)
+        rows = res.scalars().all()
+        
+        history_list = []
+        for r in rows:
+            # We reconstruct both the BUY and SELL entries to populate both sub-tabs in frontend
+            # Determining symbol currency
+            is_crypto = "BTC" in r.pair or "ETH" in r.pair or "SOL" in r.pair or "ADA" in r.pair
+            curr = "$" if is_crypto else "₹"
+            
+            # Determine quantity (fallback to 1.0)
+            qty = getattr(r, "quantity", 1.0) or 1.0
+            # Get leverage value (default 10)
+            try:
+                lev_num = int(r.leverage.replace("X", ""))
+            except:
+                lev_num = 10
+            # Calculate actual margin blocked
+            margin_blocked = (qty * r.entry_price) / lev_num
+            invest_str = f"{curr}{margin_blocked:,.2f}"
+            
+            # 1. Add BUY entry record
+            history_list.append({
+                "id": f"buy-{r.id}",
+                "date": r.date.strftime("%Y-%m-%d %H:%M:%S") if r.date else "",
+                "pair": r.pair,
+                "type": r.type,
+                "investment": invest_str,
+                "leverage": r.leverage,
+                "profit": r.profit,
+                "returnPct": r.return_pct,
+                "status": f"CLOSED ({r.status})",
+                "entryPrice": r.entry_price,
+                "targetPrice": r.exit_price, # rough approximation
+                "highestPrice": r.highest_price or r.entry_price,
+                "exitPrice": r.exit_price,
+                "action": "BUY"
+            })
+            
+            # 2. Add SELL exit record
+            history_list.append({
+                "id": f"sell-{r.id}",
+                "date": r.date.strftime("%Y-%m-%d %H:%M:%S") if r.date else "",
+                "pair": r.pair,
+                "type": r.type,
+                "investment": invest_str,
+                "leverage": r.leverage,
+                "profit": r.profit,
+                "returnPct": r.return_pct,
+                "status": r.status,
+                "entryPrice": r.entry_price,
+                "highestPrice": r.highest_price or r.entry_price,
+                "exitPrice": r.exit_price,
+                "action": "SELL"
+            })
+            
+        return history_list
+
+@router.get("/prices")
+async def get_all_prices():
+    return GLOBAL_PRICE_CACHE
 
 @router.post("/clear-active-positions")
 async def clear_active_positions():
@@ -2418,8 +3231,12 @@ async def retrain_ensemble(req: RetrainRequest):
     symbol = req.symbol
     mode = req.mode
     
+    user_info = await query_user_info()
+    ai_candle_interval = user_info.get("ai_candle_interval", "30s") if user_info else "30s"
+    cooldown_seconds = parse_interval_to_seconds(ai_candle_interval)
+    
     if mode == "demo":
-        candles = get_demo_candles(symbol)
+        candles = get_demo_candles(symbol, cooldown_seconds)
     else:
         res = await get_chart_data(symbol, timeframe="1m")
         candles = res.get("candles", [])
@@ -2461,8 +3278,12 @@ async def retrain_ensemble(req: RetrainRequest):
 
 @router.get("/prediction")
 async def get_prediction(symbol: str = "BTC/USDT", mode: str = "demo"):
+    user_info = await query_user_info()
+    ai_candle_interval = user_info.get("ai_candle_interval", "30s") if user_info else "30s"
+    cooldown_seconds = parse_interval_to_seconds(ai_candle_interval)
+    
     if mode == "demo":
-        candles = get_demo_candles(symbol)
+        candles = get_demo_candles(symbol, cooldown_seconds)
     else:
         res = await get_chart_data(symbol, timeframe="1m")
         candles = res.get("candles", [])
@@ -2488,7 +3309,20 @@ async def get_prediction(symbol: str = "BTC/USDT", mode: str = "demo"):
             ]
         }
         
-    consensus, confidence, agree_count, total_algos, indicators = predict_consensus(symbol, candles)
+    # Query learned strategies
+    from database import AsyncSessionLocal
+    from models import User, AIKnowledge
+    from sqlalchemy import select
+    
+    strategies = []
+    async with AsyncSessionLocal() as session:
+        user_res = await session.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        if user:
+            res_strat = await session.execute(select(AIKnowledge).where(AIKnowledge.user_id == user.id))
+            strategies = res_strat.scalars().all()
+            
+    consensus, confidence, agree_count, total_algos, indicators, matched_strategy_id = predict_consensus(symbol, candles, strategies)
     
     if not GLOBAL_MODELS_STATE:
         load_models_state()
@@ -2508,7 +3342,15 @@ async def get_prediction(symbol: str = "BTC/USDT", mode: str = "demo"):
             "name": name,
             "val": state.get("accuracy", 80.0),
             "status": "ACTIVE",
-            "weight": "25%" if key == "LSTM" else "20%"
+            "weight": "20%" if len(strategies) > 0 else ("25%" if key == "LSTM" else "20%")
+        })
+        
+    if len(strategies) > 0:
+        metrics.append({
+            "name": "Strategy Knowledge Voter",
+            "val": 92.5,
+            "status": "ACTIVE",
+            "weight": "25%"
         })
         
     return {
@@ -2519,3 +3361,122 @@ async def get_prediction(symbol: str = "BTC/USDT", mode: str = "demo"):
         "indicators": indicators,
         "metrics": metrics
     }
+def parse_interval_to_seconds(interval_str: str) -> float:
+    if not interval_str:
+        return 30.0
+    val_str = interval_str.strip().lower()
+    num_part = "".join([c for c in val_str if c.isdigit()])
+    unit = "".join([c for c in val_str if not c.isdigit()]).strip()
+    if not num_part:
+        return 30.0
+    try:
+        val = float(num_part)
+        if unit == "s":
+            return val
+        elif unit == "m":
+            return val * 60.0
+        elif unit == "h":
+            return val * 3600.0
+        elif unit == "d":
+            return val * 86400.0
+    except ValueError:
+        pass
+    return 30.0
+
+
+async def trigger_ai_anomaly_consultation(symbol: str, issue_type: str, error_context: str, strategy_id: int = None):
+    try:
+        from database import AsyncSessionLocal
+        from services.ai_intelligence_service import ai_intelligence_service
+        from services.ai_knowledge_base import add_ai_consultation, get_ai_summary_stats
+        
+        async with AsyncSessionLocal() as session:
+            from models import User, UserSetting, AIKnowledge
+            from sqlalchemy import select
+            user_res = await session.execute(select(User).limit(1))
+            user = user_res.scalars().first()
+            if not user:
+                return
+                
+            stmt = select(UserSetting).where(UserSetting.user_id == user.id)
+            res = await session.execute(stmt)
+            settings = res.scalar_one_or_none()
+            
+            # Only consult if settings set to 'anomaly' or 'every_trade'
+            consult_mode = settings.ai_consultation_mode if settings else "anomaly"
+            if consult_mode == "manual":
+                print("[AI Consultation] Consultation mode is MANUAL. Skipping auto-consultation.")
+                return
+                
+            # Check budget
+            stats = await get_ai_summary_stats(session, user.id)
+            budget_limit = settings.ai_daily_budget if settings else 5.0
+            if stats["today_cost_usd"] >= budget_limit and settings and settings.claude_api_key and "FREE" not in settings.claude_api_key:
+                print(f"[AI Consultation] Daily budget of ${budget_limit:.2f} reached. Skipping.")
+                return
+                
+            cl_key = settings.claude_api_key if settings else None
+            
+            # Fetch matched strategy details if available
+            strategy_context = "No specific YouTube learned strategy was active for this trade (generic technical signal trigger)."
+            if strategy_id:
+                strat = await session.get(AIKnowledge, strategy_id)
+                if strat:
+                    try:
+                        rules_list = json.loads(strat.rules)
+                        rules_str = "\n".join([f"- {r.get('rule')}: {r.get('detail')}" for r in rules_list])
+                        strategy_context = (
+                            f"Active Learned Strategy: '{strat.title}'\n"
+                            f"Strategy Type: {strat.strategy_type}\n"
+                            f"Rules:\n{rules_str}"
+                        )
+                    except Exception as parse_err:
+                        print(f"[AI Consultation Strategy Parse Error] {parse_err}")
+            
+            # Fetch news
+            news_items = await ai_intelligence_service.fetch_news_feed(symbol)
+            news_text = "\n".join([f"- {n['title']} (Source: {n['source']})" for n in news_items])
+            
+            system_prompt = (
+                "You are 'Antigravity AI Trader Advisor'. An anomaly or exit was detected on a trade. "
+                "Diagnose the issue based on the news, indicators, and the active learned strategy rules. "
+                "Recommend if we should tweak/suspend the strategy or adjust trading parameters. Be extremely concise."
+            )
+            prompt = (
+                f"Asset: {symbol}\n"
+                f"Issue: {issue_type} - {error_context}\n\n"
+                f"Strategy Context:\n{strategy_context}\n\n"
+                f"Recent News:\n{news_text}\n"
+            )
+            
+            ai_res = await ai_intelligence_service.consult_claude_ai(prompt, system_prompt, cl_key, settings.claude_model if settings else None)
+
+            ai_recommendation = ai_res.get("recommendation", "HOLD")
+            
+            # Save consultation
+            await add_ai_consultation(
+                session,
+                user_id=user.id,
+                symbol=symbol,
+                issue_type="anomaly",
+                prompt_summary=f"Auto-anomaly diagnosis: {error_context[:100]}",
+                response_summary=ai_res["text"][:400],
+                recommendation=ai_recommendation,
+                tokens_used=ai_res.get("tokens_used", 0),
+                estimated_cost=ai_res.get("cost", 0.0)
+            )
+            await session.commit()
+            
+            # Broadcast notification
+            notification = {
+                "type": "ai_consultation",
+                "symbol": symbol,
+                "recommendation": ai_recommendation,
+                "response": ai_res["text"],
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "is_simulated": ai_res.get("simulated", True)
+            }
+            await manager.broadcast_notification_to_all(json.dumps(notification))
+            print(f"[AI Consultation] Triggered auto-consultation for {symbol}: {ai_recommendation}")
+    except Exception as e:
+        print(f"[AI Consultation Exception] Failed to run auto-consultation: {e}")

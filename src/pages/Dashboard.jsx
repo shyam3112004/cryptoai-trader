@@ -10,6 +10,7 @@ export default function Dashboard() {
   
   const [activeMode, setActiveMode] = useState(user?.mode || 'demo')
   const [currentTab, setCurrentTab] = useState('dashboard') // dashboard, algorithms, history, signals
+  const [historySubTab, setHistorySubTab] = useState('sell') // sell (completed exits), buy (open/active entries)
   const [profitTarget, setProfitTarget] = useState(() => {
     const saved = localStorage.getItem('profitTarget')
     return saved ? saved : '1.5X'
@@ -39,9 +40,13 @@ export default function Dashboard() {
     }
   }
 
-  const [realizedBalance, setRealizedBalance] = useState(() => {
-    const saved = localStorage.getItem('realizedBalance')
-    return saved ? parseFloat(saved) : 10000.00
+  const [realizedBalanceUSD, setRealizedBalanceUSD] = useState(() => {
+    const saved = localStorage.getItem('realizedBalanceUSD')
+    return saved ? parseFloat(saved) : 10.00
+  })
+  const [realizedBalanceINR, setRealizedBalanceINR] = useState(() => {
+    const saved = localStorage.getItem('realizedBalanceINR')
+    return saved ? parseFloat(saved) : 100.00
   })
   const [realizedTodayPnl, setRealizedTodayPnl] = useState(() => {
     const saved = localStorage.getItem('realizedTodayPnl')
@@ -60,16 +65,30 @@ export default function Dashboard() {
     return localStorage.getItem('realAccountAsset') || 'USDT'
   })
 
-  const [balance, setBalance] = useState(realizedBalance)
+  const [balance, setBalance] = useState(() => {
+    const currentSym = localStorage.getItem('selectedSymbol') || 'BTC/USDT'
+    const isCrypto = (currentSym || '').toUpperCase().endsWith('USDT') || (currentSym || '').toUpperCase().includes('/') ? (currentSym || '').toUpperCase().includes('USDT') : true
+    if (isCrypto) {
+      const saved = localStorage.getItem('realizedBalanceUSD')
+      return saved ? parseFloat(saved) : 10.00
+    } else {
+      const saved = localStorage.getItem('realizedBalanceINR')
+      return saved ? parseFloat(saved) : 100.00
+    }
+  })
   const [todayPnl, setTodayPnl] = useState(realizedTodayPnl)
   
+  const [tradeShares, setTradeShares] = useState(() => {
+    const saved = localStorage.getItem('tradeShares')
+    return saved ? parseFloat(saved) : 1.0
+  })
   const [tradeInvestmentUSD, setTradeInvestmentUSD] = useState(() => {
     const saved = localStorage.getItem('tradeInvestmentUSD')
     return saved ? parseFloat(saved) : 100.00
   })
   const [tradeInvestmentINR, setTradeInvestmentINR] = useState(() => {
     const saved = localStorage.getItem('tradeInvestmentINR')
-    return saved ? parseFloat(saved) : 1000.00
+    return saved ? parseFloat(saved) : 10000.00
   })
   const [autoTradeMode, setAutoTradeMode] = useState(() => {
     const saved = localStorage.getItem('autoTradeMode')
@@ -88,6 +107,7 @@ export default function Dashboard() {
   const [brokerGateway, setBrokerGateway] = useState(() => localStorage.getItem('brokerGateway') || 'Angel One SmartAPI (100% FREE Lifetime Access)')
   const [brokerApiKey, setBrokerApiKey] = useState(() => localStorage.getItem('brokerApiKey') || 'FREE_SMARTAPI_LIVE_KEY_9482')
   const [brokerApiSecret, setBrokerApiSecret] = useState(() => localStorage.getItem('brokerApiSecret') || 'FREE_SMARTAPI_SECRET_7710')
+  const [tradeDirection, setTradeDirection] = useState(() => localStorage.getItem('tradeDirection') || 'BOTH')
 
   // Alerts Settings parameters
   const [enableWhatsapp, setEnableWhatsapp] = useState(() => {
@@ -116,13 +136,21 @@ export default function Dashboard() {
   const [maxOpenPositions, setMaxOpenPositions] = useState(3)
   const [stopLossLimit, setStopLossLimit] = useState(2.0)
   const [tradePacing, setTradePacing] = useState('rapid')
-  const [dailyProfitTarget, setDailyProfitTarget] = useState(() => {
-    const val = localStorage.getItem('dailyProfitTarget')
-    return val !== null ? parseFloat(val) : 500.0
+  const [dailyProfitTargetUSD, setDailyProfitTargetUSD] = useState(() => {
+    const val = localStorage.getItem('dailyProfitTargetUSD')
+    return val !== null ? parseFloat(val) : 2.00
   })
-  const [dailyLossLimit, setDailyLossLimit] = useState(() => {
-    const val = localStorage.getItem('dailyLossLimit')
-    return val !== null ? parseFloat(val) : 200.0
+  const [dailyProfitTargetINR, setDailyProfitTargetINR] = useState(() => {
+    const val = localStorage.getItem('dailyProfitTargetINR')
+    return val !== null ? parseFloat(val) : 20.00
+  })
+  const [dailyLossLimitUSD, setDailyLossLimitUSD] = useState(() => {
+    const val = localStorage.getItem('dailyLossLimitUSD')
+    return val !== null ? parseFloat(val) : 1.00
+  })
+  const [dailyLossLimitINR, setDailyLossLimitINR] = useState(() => {
+    const val = localStorage.getItem('dailyLossLimitINR')
+    return val !== null ? parseFloat(val) : 10.00
   })
   const [enableTrailingStop, setEnableTrailingStop] = useState(() => {
     const val = localStorage.getItem('enableTrailingStop')
@@ -133,6 +161,65 @@ export default function Dashboard() {
     return val !== null ? val === 'true' : false
   })
   const [dailyPnl, setDailyPnl] = useState(0.0)
+
+  // AI-Powered Trading Intelligence States
+  const [youtubeApiKey, setYoutubeApiKey] = useState('')
+  const [claudeApiKey, setClaudeApiKey] = useState('')
+  const [claudeModel, setClaudeModel] = useState('google/gemini-2.5-flash:free')
+  const [aiConsultationMode, setAiConsultationMode] = useState('anomaly')
+  const [aiDailyBudget, setAiDailyBudget] = useState(5.0)
+  const [aiCandleInterval, setAiCandleInterval] = useState('30s')
+
+  const handleTimeframeChange = async (newTf) => {
+    console.log("[TIMEFRAME-SYNC] Syncing timeframe to AI interval:", newTf)
+    setTimeframe(newTf)
+    setAiCandleInterval(newTf)
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const activeToken = token || localStorage.getItem('token')
+      await fetch(`${apiBase}/api/v1/ai/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({
+          ai_candle_interval: newTf
+        })
+      })
+    } catch (e) {
+      console.error('Failed to sync chart timeframe to AI settings:', e)
+    }
+  }
+
+  
+  const [aiStatus, setAiStatus] = useState({
+    youtube_connected: false,
+    claude_connected: false,
+    youtube_api_status: 'Demo',
+    claude_api_status: 'Demo',
+    budget_limit_usd: 5.0,
+    strategies_count: 0,
+    consultations_count: 0,
+    today_cost_usd: 0.0,
+    last_recommendation: 'N/A',
+    last_consult_time: null
+  })
+  
+  const [aiConsultResult, setAiConsultResult] = useState(null)
+  const [aiConsulting, setAiConsulting] = useState(false)
+  const [ytSearchQuery, setYtSearchQuery] = useState('scalping strategy')
+  const [ytVideos, setYtVideos] = useState([])
+  const [ytLoading, setYtLoading] = useState(false)
+  const [ytLearningId, setYtLearningId] = useState(null)
+  const [knowledgeBase, setKnowledgeBase] = useState([])
+  const [backtestResult, setBacktestResult] = useState(null)
+  const [isBacktesting, setIsBacktesting] = useState(false)
+  const [showBacktestModal, setShowBacktestModal] = useState(false)
+  const [consultationsLog, setConsultationsLog] = useState([])
+  const [aiActiveSection, setAiActiveSection] = useState('advisor') // advisor, youtube, knowledge, log
+  const [showKeysConfig, setShowKeysConfig] = useState(false)
+  const [saveKeysStatus, setSaveKeysStatus] = useState('')
 
   // Chart, symbol selection & emergency stop states
   const [selectedSymbol, setSelectedSymbol] = useState(() => localStorage.getItem('selectedSymbol') || 'BTC/USDT')
@@ -217,12 +304,45 @@ export default function Dashboard() {
   }
 
   const isCryptoActive = getCurrencySymbol(selectedSymbol) === '$'
+  const realizedBalance = isCryptoActive ? realizedBalanceUSD : realizedBalanceINR
+  const setRealizedBalance = (val) => {
+    if (isCryptoActive) {
+      setRealizedBalanceUSD(val)
+      localStorage.setItem('realizedBalanceUSD', val.toString())
+    } else {
+      setRealizedBalanceINR(val)
+      localStorage.setItem('realizedBalanceINR', val.toString())
+    }
+  }
+
   const tradeInvestment = isCryptoActive ? tradeInvestmentUSD : tradeInvestmentINR
   const setTradeInvestment = (val) => {
     if (isCryptoActive) {
       setTradeInvestmentUSD(val)
     } else {
       setTradeInvestmentINR(val)
+    }
+  }
+
+  const dailyProfitTarget = isCryptoActive ? dailyProfitTargetUSD : dailyProfitTargetINR
+  const setDailyProfitTarget = (val) => {
+    if (isCryptoActive) {
+      setDailyProfitTargetUSD(val)
+      localStorage.setItem('dailyProfitTargetUSD', val.toString())
+    } else {
+      setDailyProfitTargetINR(val)
+      localStorage.setItem('dailyProfitTargetINR', val.toString())
+    }
+  }
+
+  const dailyLossLimit = isCryptoActive ? dailyLossLimitUSD : dailyLossLimitINR
+  const setDailyLossLimit = (val) => {
+    if (isCryptoActive) {
+      setDailyLossLimitUSD(val)
+      localStorage.setItem('dailyLossLimitUSD', val.toString())
+    } else {
+      setDailyLossLimitINR(val)
+      localStorage.setItem('dailyLossLimitINR', val.toString())
     }
   }
 
@@ -338,8 +458,9 @@ export default function Dashboard() {
   }, [enabledAutoTradeMarkets])
 
   useEffect(() => {
-    localStorage.setItem('realizedBalance', realizedBalance)
+    localStorage.setItem('realizedBalance', realizedBalance.toString())
     realizedBalanceRef.current = realizedBalance
+    setBalance(realizedBalance)
   }, [realizedBalance])
   
   useEffect(() => {
@@ -354,6 +475,12 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem('tradeInvestmentINR', tradeInvestmentINR)
   }, [tradeInvestmentINR])
+
+  useEffect(() => {
+    localStorage.setItem('tradeShares', tradeShares.toString())
+    setTradeInvestmentUSD(tradeShares * 100.0)
+    setTradeInvestmentINR(tradeShares * 10000.0)
+  }, [tradeShares])
 
   useEffect(() => {
     const isCrypto = getCurrencySymbol(selectedSymbol) === '$'
@@ -376,7 +503,8 @@ export default function Dashboard() {
           },
           body: JSON.stringify({
             trade_investment_usd: tradeInvestmentUSD,
-            trade_investment_inr: tradeInvestmentINR
+            trade_investment_inr: tradeInvestmentINR,
+            trade_shares: tradeShares
           })
         })
       } catch (e) {
@@ -385,7 +513,7 @@ export default function Dashboard() {
     }
     const timeoutId = setTimeout(saveTradeSize, 1000)
     return () => clearTimeout(timeoutId)
-  }, [tradeInvestmentUSD, tradeInvestmentINR])
+  }, [tradeInvestmentUSD, tradeInvestmentINR, tradeShares])
 
   useEffect(() => {
     localStorage.setItem('autoTradeMode', autoTradeMode)
@@ -446,6 +574,9 @@ export default function Dashboard() {
   const mouseRef = useRef(null)
   const dragStartRef = useRef(null)
   const costBasisRef = useRef(null)
+  const simPositionDirectionRef = useRef('LONG')
+  const positionDirectionRef = useRef('LONG')
+  const simPositionExtremePriceRef = useRef(null)
   const selectedSymbolRef = useRef(selectedSymbol)
   const cooldownRef = useRef(0)
 
@@ -492,6 +623,13 @@ export default function Dashboard() {
   })
 
   const [activePositions, setActivePositions] = useState({})
+  const [marketPrices, setMarketPrices] = useState({})
+
+  const totalBlockedMargin = Object.values(activePositions).reduce((acc, pos) => {
+    const leverage = 10;
+    return acc + ((pos.qty * pos.entry_price) / leverage);
+  }, 0);
+  const displayedBalance = Math.max(0, balance - totalBlockedMargin);
 
   const [historyPage, setHistoryPage] = useState(1)
 
@@ -657,6 +795,13 @@ export default function Dashboard() {
   const pollAutoModeStatus = async () => {
     try {
       const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      
+      // Fetch all market prices in parallel
+      fetch(`${apiBase}/api/v1/signals/prices`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setMarketPrices(d) })
+        .catch(err => console.error('Failed to fetch live prices:', err))
+
       const res = await fetch(`${apiBase}/api/v1/signals/auto-mode?investment=${tradeInvestmentRef.current || 100.0}`)
       if (res.ok) {
         const data = await res.json()
@@ -703,17 +848,25 @@ export default function Dashboard() {
         if (data.broker_api_key) setBrokerApiKey(data.broker_api_key)
         if (data.broker_api_secret) setBrokerApiSecret(data.broker_api_secret)
         if (data.profit_target) setProfitTarget(data.profit_target)
+        if (data.trade_direction) {
+          setTradeDirection(data.trade_direction)
+          localStorage.setItem('tradeDirection', data.trade_direction)
+        }
         
-        const localUSD = localStorage.getItem('tradeInvestmentUSD')
-        const localINR = localStorage.getItem('tradeInvestmentINR')
-        if (localUSD) {
-          setTradeInvestmentUSD(parseFloat(localUSD))
-        } else if (data.trade_investment_usd) {
+        const localShares = localStorage.getItem('tradeShares')
+        if (localShares) {
+          setTradeShares(parseFloat(localShares))
+        } else if (data.trade_shares) {
+          setTradeShares(data.trade_shares)
+        } else {
+          const usd = data.trade_investment_usd || 100.0
+          setTradeShares(usd / 100.0)
+        }
+        
+        if (data.trade_investment_usd) {
           setTradeInvestmentUSD(data.trade_investment_usd)
         }
-        if (localINR) {
-          setTradeInvestmentINR(parseFloat(localINR))
-        } else if (data.trade_investment_inr) {
+        if (data.trade_investment_inr) {
           setTradeInvestmentINR(data.trade_investment_inr)
         }
         
@@ -763,11 +916,32 @@ export default function Dashboard() {
       console.error('Failed to fetch settings from backend:', e)
     }
   }
+  const fetchTradeHistoryFromBackend = async () => {
+    try {
+      const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+      const res = await fetch(`${apiBase}/api/v1/signals/trade-history`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setTradeHistory(data)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch trade history from database:', e)
+    }
+  }
 
   useEffect(() => {
     setIsMounted(true)
     generateChartData(timeframe, selectedSymbol)
     fetchSettingsFromBackend()
+    fetchTradeHistoryFromBackend()
     pollAutoModeStatus()
 
     const autoModeInterval = setInterval(pollAutoModeStatus, 3000)
@@ -1120,6 +1294,55 @@ export default function Dashboard() {
         }
       })
 
+      // ─── Draw Active Position Lines (Entry, Target, Stop Loss) ───
+      const symNormalized = selectedSymbol.toUpperCase().replace('/', '').replace(' ', '')
+      const activePos = activePositions[symNormalized]
+      if (activePos) {
+        const entryPrice = activePos.entry_price
+        const targetPrice = activePos.target_price
+        const slLimit = stopLossLimitRef?.current || stopLossLimit || 2.0
+        const stopLossPrice = activePos.direction === 'SHORT'
+          ? entryPrice * (1 + slLimit / 100)
+          : entryPrice * (1 - slLimit / 100)
+
+        const drawPositionLine = (price, color, labelText) => {
+          const y = scaleY(price)
+          ctx.strokeStyle = color
+          ctx.lineWidth = 1
+          ctx.setLineDash([4, 4])
+          ctx.beginPath()
+          ctx.moveTo(0, y)
+          ctx.lineTo(chartW, y)
+          ctx.stroke()
+          ctx.setLineDash([])
+
+          ctx.fillStyle = color
+          ctx.font = 'bold 9px sans-serif'
+          ctx.textAlign = 'left'
+          const textW = ctx.measureText(labelText).width
+          ctx.fillRect(4, y - 8, textW + 8, 16)
+          ctx.fillStyle = '#080C18'
+          ctx.fillText(labelText, 8, y + 3)
+
+          ctx.fillStyle = color
+          ctx.fillRect(chartW, y - 8, PRICE_AXIS_W, 16)
+          ctx.fillStyle = '#080C18'
+          ctx.font = 'bold 9px monospace'
+          ctx.textAlign = 'left'
+          ctx.fillText(price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), chartW + 6, y + 3)
+        }
+
+        if (stopLossPrice >= minP && stopLossPrice <= maxP) {
+          drawPositionLine(stopLossPrice, '#FF3D57', `🛡️ SL: ${stopLossPrice.toFixed(2)}`)
+        }
+        if (targetPrice >= minP && targetPrice <= maxP) {
+          drawPositionLine(targetPrice, '#00E676', `🎯 TP: ${targetPrice.toFixed(2)}`)
+        }
+        if (entryPrice >= minP && entryPrice <= maxP) {
+          drawPositionLine(entryPrice, '#00E5FF', `📥 ENTRY: ${entryPrice.toFixed(2)}`)
+        }
+      }
+
       // ─── Price Axis (right side) ───
       ctx.fillStyle = '#0D1322'
       ctx.fillRect(chartW, 0, PRICE_AXIS_W, H)
@@ -1318,6 +1541,32 @@ export default function Dashboard() {
         try {
           const payload = JSON.parse(event.data)
           
+          if (payload.type === 'ai_consultation') {
+            const newNotif = {
+              id: generateUniqueId(),
+              title: `🧠 AI Advisor: ${payload.symbol}`,
+              desc: `Recommendation: ${payload.recommendation}. ${payload.response.slice(0, 100)}...`,
+              time: payload.timestamp || 'Just now',
+              action: 'AI_ADVISOR'
+            }
+            setNotifications(prev => [newNotif, ...prev.slice(0, 19)])
+            setHasUnreadNotifications(true)
+            triggerDesktopNotification(`🧠 AI Advisor: ${payload.symbol}`, `Recommendation: ${payload.recommendation}`)
+            
+            if (payload.symbol === selectedSymbolRef.current) {
+              setAiConsultResult({
+                success: true,
+                recommendation: payload.recommendation,
+                response: payload.response,
+                simulated: payload.is_simulated,
+                news: []
+              })
+            }
+            fetchAiStatus()
+            fetchConsultationsLog()
+            return
+          }
+
           // Handle incoming notifications (e.g. trade execution alerts)
           if (payload.type === 'notification') {
             if (!autoTradeRef.current) return
@@ -1326,9 +1575,11 @@ export default function Dashboard() {
               id: generateUniqueId(),
               title: payload.title,
               desc: payload.body,
-              time: payload.timestamp || 'Just now'
+              time: payload.timestamp || 'Just now',
+              action: payload.action
             }
             setNotifications(prev => [newNotif, ...prev.slice(0, 19)])
+            setHasUnreadNotifications(true)
             triggerDesktopNotification(payload.title, payload.body)
 
             const norm = (s) => s ? s.toUpperCase().replace('/', '').replace(' ', '') : ''
@@ -1341,8 +1592,9 @@ export default function Dashboard() {
               const isMarketAllowed = true // Always allow active symbol
               // if (!isMarketAllowed) return
 
-              const isBuy = payload.title.includes('BUY') || payload.title.includes('LONG') || payload.title.includes('ORDER EXECUTED')
-              const isClosed = payload.title.includes('STOP LOSS') || payload.title.includes('TARGET HIT') || payload.title.includes('SELL')
+              const isAiGating = payload.action && payload.action.startsWith('AI_')
+              const isBuy = !isAiGating && (payload.title.includes('BUY') || payload.title.includes('LONG') || payload.title.includes('ORDER EXECUTED'))
+              const isClosed = !isAiGating && (payload.title.includes('STOP LOSS') || payload.title.includes('TARGET HIT') || payload.title.includes('SELL'))
               const lastCandle = chartDataRef.current[chartDataRef.current.length - 1]
               
               if (lastCandle) {
@@ -1361,10 +1613,12 @@ export default function Dashboard() {
                 if (isClosed) {
                   const entryPriceVal = payload.entry_price || costBasisRef.current || 0
                   const exitPriceVal = payload.exit_price || payload.close || lastCandle?.close || 0
-                  const priceDiffPct = entryPriceVal > 0 ? (exitPriceVal - entryPriceVal) / entryPriceVal : 0
+                  const isShort = payload.direction === 'SHORT' || payload.title.includes('SHORT') || payload.body.toLowerCase().includes('short')
+                  
+                  const rawDiff = entryPriceVal > 0 ? (exitPriceVal - entryPriceVal) / entryPriceVal : 0
+                  const priceDiffPct = isShort ? -rawDiff : rawDiff
                   const pnlPctVal = priceDiffPct * 10 * 100 // 10X leveraged return percentage
 
-                  const isShort = payload.title.includes('SHORT') || payload.body.toLowerCase().includes('short')
                   const directionMult = isShort ? -1 : 1
                   const finalPnl = tradeInvestmentRef.current * (pnlPctVal / 100) * directionMult
 
@@ -1384,6 +1638,7 @@ export default function Dashboard() {
 
                   // Close position
                   costBasisRef.current = null
+                  positionDirectionRef.current = 'LONG'
 
                   // Rotate symbol if autoTradeMode is set to 'rotation'
                   if (autoTradeModeRef.current === 'rotation') {
@@ -1408,29 +1663,44 @@ export default function Dashboard() {
                     : (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(2)}` : `-${symb}${Math.abs(finalPnl).toFixed(2)}`)
                   const returnPctStr = pnlPctVal >= 0 ? `+${pnlPctVal.toFixed(2)}%` : `${pnlPctVal.toFixed(2)}%`
 
-                  setTradeHistory(prev => [
-                    {
-                      id: generateUniqueId(),
-                      date: formattedDate,
-                      pair: selectedSymbolRef.current,
-                      type: isShort ? 'SHORT' : 'LONG',
-                      investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
-                      leverage: '10X',
-                      profit: formatPnl,
-                      returnPct: returnPctStr,
-                      status: payload.title.includes('STOP LOSS') ? 'STOP LOSS' : 'TARGET HIT',
-                      entryPrice: entryPriceVal,
-                      exitPrice: payload.exit_price || payload.close || lastCandle?.close || 0
-                    },
-                    ...prev.slice(0, 499)
-                  ])
+                  const exitStatus = payload.title.includes('STOP LOSS') ? 'STOP LOSS' : 'TARGET HIT'
+                  setTradeHistory(prev => {
+                    const updated = prev.map(t => {
+                      if (t.pair === selectedSymbolRef.current && t.action === 'BUY' && t.status === 'OPEN') {
+                        return {
+                          ...t,
+                          status: `CLOSED (${exitStatus})`,
+                          exitPrice: exitPriceVal
+                        }
+                      }
+                      return t
+                    })
+                    return [
+                      {
+                        id: generateUniqueId(),
+                        date: formattedDate,
+                        pair: selectedSymbolRef.current,
+                        type: isShort ? 'SHORT' : 'LONG',
+                        investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
+                        leverage: '10X',
+                        profit: formatPnl,
+                        returnPct: returnPctStr,
+                        status: exitStatus,
+                        entryPrice: entryPriceVal,
+                        highestPrice: payload.highest_price || payload.entry_price || exitPriceVal,
+                        exitPrice: exitPriceVal,
+                        action: 'SELL'
+                      },
+                      ...updated.slice(0, 999)
+                    ]
+                  })
 
                   const displayExitPrice = typeof exitPriceVal === 'number' ? exitPriceVal.toLocaleString() : exitPriceVal
                   setLogs(prev => [
                     {
                       id: generateUniqueId(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                      action: `CLOSE ${selectedSymbolRef.current}`,
+                      action: `CLOSE ${isShort ? 'SHORT' : 'LONG'} ${selectedSymbolRef.current}`,
                       qty: `10X @ ${symb}${displayExitPrice}`,
                       pnl: formatPnl,
                       type: finalPnl >= 0 ? 'buy' : 'sell'
@@ -1441,29 +1711,67 @@ export default function Dashboard() {
                     finalPnl >= 0 ? `🎯 TARGET HIT: ${selectedSymbolRef.current}` : `⚠️ STOP LOSS: ${selectedSymbolRef.current}`,
                     `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${exitPriceVal.toLocaleString()}`
                   )
+                  fetchActivePositions()
+                  fetchTradeHistoryFromBackend()
                 } else if (isBuy) {
                   // Open new position
                   const entryVal = payload.entry_price || lastCandle?.close || 0
                   costBasisRef.current = entryVal
                   const displayEntryPrice = typeof entryVal === 'number' ? entryVal.toLocaleString() : entryVal
                   const symb = getCurrencySymbol(selectedSymbolRef.current)
+                  const isShort = payload.direction === 'SHORT' || payload.title.includes('SHORT')
+                  positionDirectionRef.current = isShort ? 'SHORT' : 'LONG'
                   
+                  // Add to trade history logs as BUY entry
+                  const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
+                  const slLimitVal = stopLossLimitRef.current || 2.0
+                  const targetStrVal = profitTargetRef.current || '1.5X'
+                  const multVal = targetStrVal === '1.2X' ? 1.2 : (targetStrVal === '2.0X' ? 2.0 : 1.5)
+                  const targetUnleveragedVal = (slLimitVal * multVal) / 100.0
+                  const localTargetPrice = isShort 
+                    ? entryVal * (1.0 - targetUnleveragedVal)
+                    : entryVal * (1.0 + targetUnleveragedVal)
+                  
+                  const targetPriceVal = payload.target_price || localTargetPrice
+
+                  setTradeHistory(prev => [
+                    {
+                      id: generateUniqueId(),
+                      date: formattedDate,
+                      pair: selectedSymbolRef.current,
+                      type: isShort ? 'SHORT' : 'LONG',
+                      investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
+                      leverage: '10X',
+                      profit: '—',
+                      returnPct: '—',
+                      status: 'OPEN',
+                      entryPrice: entryVal,
+                      targetPrice: targetPriceVal,
+                      highestPrice: entryVal,
+                      exitPrice: null,
+                      action: 'BUY'
+                    },
+                    ...prev.slice(0, 999)
+                  ])
+
                   // Add to execution logs card
                   setLogs(prev => [
                     {
                       id: generateUniqueId(),
                       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                      action: `OPEN LONG ${selectedSymbolRef.current}`,
+                      action: `OPEN ${isShort ? 'SHORT' : 'LONG'} ${selectedSymbolRef.current}`,
                       qty: `10X @ ${symb}${displayEntryPrice}`,
                       pnl: '0.00',
-                      type: 'buy'
+                      type: isShort ? 'sell' : 'buy'
                     },
                     ...prev.slice(0, 7)
                   ])
                   triggerDesktopNotification(
-                    `🟢 BUY EXECUTED: ${selectedSymbolRef.current}`,
-                    `10X Long entry position opened at ${symb}${entryVal.toLocaleString()}`
+                    isShort ? `🔴 SHORT EXECUTED: ${selectedSymbolRef.current}` : `🟢 BUY EXECUTED: ${selectedSymbolRef.current}`,
+                    `10X ${isShort ? 'Short' : 'Long'} entry position opened at ${symb}${entryVal.toLocaleString()}`
                   )
+                  fetchActivePositions()
+                  fetchTradeHistoryFromBackend()
                 }
               }
             }
@@ -1487,7 +1795,26 @@ export default function Dashboard() {
           if (autoTradeRef.current && costBasisRef.current !== null) {
             const entryPrice = costBasisRef.current
             const currentPrice = payload.close
-            const priceDiffPct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0
+            
+            // Determine if the active position is SHORT (using ref to avoid stale closures)
+            const isShortPos = positionDirectionRef.current === 'SHORT';
+            
+            const rawDiff = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0;
+            const priceDiffPct = isShortPos ? -rawDiff : rawDiff;
+            
+            // Dynamically update the open position's extreme price (highest/lowest price) in tradeHistory
+            setTradeHistory(prev => prev.map(t => {
+              if (t.status === 'OPEN' && t.pair === selectedSymbolRef.current) {
+                const isShortPosItem = t.type === 'SHORT';
+                const currentExtreme = t.highestPrice || t.entryPrice || currentPrice;
+                const newExtreme = isShortPosItem 
+                  ? Math.min(currentExtreme, currentPrice)
+                  : Math.max(currentExtreme, currentPrice);
+                return { ...t, highestPrice: newExtreme };
+              }
+              return t;
+            }));
+            
             const leveragedPnl = tradeInvestmentRef.current * priceDiffPct * 10
             const isRealMode = activeModeRef.current === 'real'
             if (isRealMode) {
@@ -1572,6 +1899,7 @@ export default function Dashboard() {
       
       fallbackInterval = setInterval(() => {
         const currentSym = selectedSymbolRef.current
+        const symb = getCurrencySymbol(currentSym)
         const isStock = !currentSym.endsWith('USDT')
         const isClosedNow = isStock && !isStockMarketOpenFrontend()
         setIsMarketClosed(isClosedNow)
@@ -1621,40 +1949,94 @@ export default function Dashboard() {
               if (maxOpenPositionsRef.current > 0 && Math.random() < pacingParams.entryChance) {
                 costBasisRef.current = newClose
                 cooldownRef.current = 0 // Reset cooldown while position is active
-                
-                // Add a green BUY marker
+                const isShortEntry = Math.random() < 0.5
+                simPositionDirectionRef.current = isShortEntry ? 'SHORT' : 'LONG'
+                simPositionExtremePriceRef.current = newClose
+
+                // Add correct marker (buy for LONG, sell for SHORT)
                 setChartMarkers(prev => [
                   ...prev,
                   {
                     time: chartDataRef.current[chartDataRef.current.length - 1]?.time || 0,
-                    type: 'buy',
+                    type: isShortEntry ? 'sell' : 'buy',
                     price: newClose,
-                    label: 'BUY'
+                    label: isShortEntry ? 'SHORT' : 'BUY'
                   }
                 ])
 
+                // Add to trade history logs as BUY entry
+                const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
+                const slLimitVal = stopLossLimitRef.current || 2.0
+                const targetStrVal = profitTargetRef.current || '1.5X'
+                const multVal = targetStrVal === '1.2X' ? 1.2 : (targetStrVal === '2.0X' ? 2.0 : 1.5)
+                const targetUnleveragedVal = (slLimitVal * multVal) / 100.0
+                const targetPriceVal = isShortEntry 
+                  ? newClose * (1.0 - targetUnleveragedVal)
+                  : newClose * (1.0 + targetUnleveragedVal)
+
+                setTradeHistory(prev => [
+                  {
+                    id: generateUniqueId(),
+                    date: formattedDate,
+                    pair: currentSym,
+                    type: isShortEntry ? 'SHORT' : 'LONG',
+                    investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
+                    leverage: '10X',
+                    profit: '—',
+                    returnPct: '—',
+                    status: 'OPEN',
+                    entryPrice: newClose,
+                    targetPrice: targetPriceVal,
+                    highestPrice: newClose, // Track extreme price so far
+                    exitPrice: null,
+                    action: 'BUY'
+                  },
+                  ...prev.slice(0, 999)
+                ])
+
                 // Add to logs
-                const symb = getCurrencySymbol(currentSym)
                 setLogs(prev => [
                   {
                     id: generateUniqueId(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                    action: `OPEN LONG ${currentSym}`,
+                    action: `OPEN ${isShortEntry ? 'SHORT' : 'LONG'} ${currentSym}`,
                     qty: `10X @ ${symb}${newClose.toLocaleString()}`,
                     pnl: '0.00',
-                    type: 'buy'
+                    type: isShortEntry ? 'sell' : 'buy'
                   },
                   ...prev.slice(0, 7)
                 ])
                 triggerDesktopNotification(
-                  `🟢 BUY EXECUTED: ${currentSym}`,
-                  `10X Long entry position opened at ${symb}${newClose.toLocaleString()}`
+                  isShortEntry ? `🔴 SHORT EXECUTED: ${currentSym}` : `🟢 BUY EXECUTED: ${currentSym}`,
+                  `10X ${isShortEntry ? 'Short' : 'Long'} entry position opened at ${symb}${newClose.toLocaleString()}`
                 )
               }
             } else {
               // Position is open, calculate active unrealized P&L
               const entryPrice = costBasisRef.current
-              const priceDiffPct = entryPrice > 0 ? (newClose - entryPrice) / entryPrice : 0
+              const isSimShort = simPositionDirectionRef.current === 'SHORT'
+              const rawDiff = entryPrice > 0 ? (newClose - entryPrice) / entryPrice : 0
+              const priceDiffPct = isSimShort ? -rawDiff : rawDiff
+              
+              if (isSimShort) {
+                simPositionExtremePriceRef.current = Math.min(simPositionExtremePriceRef.current || newClose, newClose)
+              } else {
+                simPositionExtremePriceRef.current = Math.max(simPositionExtremePriceRef.current || newClose, newClose)
+              }
+              
+              // Dynamically update the open position's extreme price (highest/lowest price) in tradeHistory
+              setTradeHistory(prev => prev.map(t => {
+                if (t.status === 'OPEN' && t.pair === currentSym) {
+                  const isShortPos = t.type === 'SHORT';
+                  const currentExtreme = t.highestPrice || t.entryPrice || newClose;
+                  const newExtreme = isShortPos 
+                    ? Math.min(currentExtreme, newClose)
+                    : Math.max(currentExtreme, newClose);
+                  return { ...t, highestPrice: newExtreme };
+                }
+                return t;
+              }));
+              
               const rawLeveragedPnl = tradeInvestmentRef.current * priceDiffPct * 10
               
               const isRealMode = activeModeRef.current === 'real'
@@ -1680,13 +2062,43 @@ export default function Dashboard() {
               }
               const pacingParams = getPacingParams(tradePacingRef.current)
 
-              // Dynamic exit trigger setup based on pacing speed
-              const isWinExit = Math.random() < 0.88
-              const shouldClose = Math.random() > (1.0 - pacingParams.exitChance)
+              // Calculate actual target/stop thresholds for the simulation trade
+              const slLimit = stopLossLimitRef.current || 2.0
+              const targetStr = profitTargetRef.current || '1.5X'
+              const mult = targetStr === '1.2X' ? 1.2 : (targetStr === '2.0X' ? 2.0 : 1.5)
+              
+              const target_unleveraged = (slLimit * mult) / 100.0
+              const stop_unleveraged = slLimit / 100.0
+              
+              const highestPriceVal = simPositionExtremePriceRef.current || entryPrice
+              
+              let simStopLossPrice = isSimShort 
+                ? entryPrice * (1.0 + stop_unleveraged)
+                : entryPrice * (1.0 - stop_unleveraged)
+                
+              if (enableTrailingStopRef.current) {
+                if (priceDiffPct >= target_unleveraged * 0.5) {
+                  simStopLossPrice = entryPrice
+                }
+                if (priceDiffPct >= target_unleveraged * 0.75) {
+                  simStopLossPrice = isSimShort
+                    ? Math.min(simStopLossPrice, highestPriceVal * 1.01)
+                    : Math.max(simStopLossPrice, highestPriceVal * 0.99)
+                }
+              }
+              
+              const targetHit = isSimShort 
+                ? newClose <= entryPrice * (1.0 - target_unleveraged)
+                : newClose >= entryPrice * (1.0 + target_unleveraged)
+                
+              const stopHit = isSimShort
+                ? newClose >= simStopLossPrice
+                : newClose <= simStopLossPrice
+              
+              const shouldClose = targetHit || stopHit || (Math.random() > (1.0 - pacingParams.exitChance))
               
               if (shouldClose) {
                 const entryPriceVal = costBasisRef.current || 0
-                const priceDiffPct = entryPriceVal > 0 ? (newClose - entryPriceVal) / entryPriceVal : 0
                 const pnlPctVal = priceDiffPct * 10 * 100 // 10X leveraged return percentage
 
                 const finalPnl = tradeInvestmentRef.current * (pnlPctVal / 100)
@@ -1704,21 +2116,18 @@ export default function Dashboard() {
                   setTodayPnl(realizedTodayPnlRef.current)
                 }
 
-                // Close position
-                costBasisRef.current = null
-
-                // Add a red SELL marker
+                // Add correct close marker (buy/COVER for SHORT, sell/SELL for LONG)
                 setChartMarkers(prev => [
                   ...prev,
                   {
                     time: chartDataRef.current[chartDataRef.current.length - 1]?.time || 0,
-                    type: 'sell',
+                    type: isSimShort ? 'buy' : 'sell',
                     price: newClose,
-                    label: 'SELL'
+                    label: isSimShort ? 'COVER' : 'SELL'
                   }
                 ])
 
-                 // Add to logs
+                // Add to logs
                 const symb = getCurrencySymbol(currentSym)
                 const formatPnl = Math.abs(finalPnl) > 0 && Math.abs(finalPnl) < 0.01
                    ? (finalPnl >= 0 ? `+${symb}${finalPnl.toFixed(4)}` : `-${symb}${Math.abs(finalPnl).toFixed(4)}`)
@@ -1727,7 +2136,7 @@ export default function Dashboard() {
                   {
                     id: generateUniqueId(),
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                    action: `CLOSE ${currentSym}`,
+                    action: `CLOSE ${isSimShort ? 'SHORT' : 'LONG'} ${currentSym}`,
                     qty: `10X @ ${symb}${newClose.toLocaleString()}`,
                     pnl: formatPnl,
                     type: finalPnl >= 0 ? 'buy' : 'sell'
@@ -1738,29 +2147,46 @@ export default function Dashboard() {
                 // Add to trade history
                 const formattedDate = new Date().toISOString().replace('T', ' ').slice(0, 19)
                 const returnPctStr = finalPnl >= 0 ? `+${pnlPctVal.toFixed(2)}%` : `${pnlPctVal.toFixed(2)}%`
-                setTradeHistory(prev => [
-                  {
-                    id: generateUniqueId(),
-                    date: formattedDate,
-                    pair: currentSym,
-                    type: 'LONG',
-                    investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
-                    leverage: '10X',
-                    profit: formatPnl,
-                    returnPct: returnPctStr,
-                    status: finalPnl >= 0 ? 'TARGET HIT' : 'STOP LOSS',
-                    entryPrice: entryPriceVal,
-                    exitPrice: newClose || 0
-                  },
-                  ...prev.slice(0, 499)
-                ])
+                const extremePriceVal = simPositionExtremePriceRef.current
+                 const exitStatus = finalPnl >= 0 ? 'TARGET HIT' : 'STOP LOSS'
+                 setTradeHistory(prev => {
+                   const updated = prev.map(t => {
+                     if (t.pair === currentSym && t.action === 'BUY' && t.status === 'OPEN') {
+                       return {
+                         ...t,
+                         status: `CLOSED (${exitStatus})`,
+                         exitPrice: newClose || 0
+                       }
+                     }
+                     return t
+                   })
+                   return [
+                     {
+                       id: generateUniqueId(),
+                       date: formattedDate,
+                       pair: currentSym,
+                       type: isSimShort ? 'SHORT' : 'LONG',
+                       investment: `${symb}${tradeInvestmentRef.current.toLocaleString()}`,
+                       leverage: '10X',
+                       profit: formatPnl,
+                       returnPct: returnPctStr,
+                       status: exitStatus,
+                       entryPrice: entryPriceVal,
+                       highestPrice: extremePriceVal || entryPriceVal,
+                       exitPrice: newClose || 0,
+                       action: 'SELL'
+                     },
+                     ...updated.slice(0, 999)
+                   ]
+                 })
                 triggerDesktopNotification(
                   finalPnl >= 0 ? `🎯 TARGET HIT: ${currentSym}` : `⚠️ STOP LOSS: ${currentSym}`,
                   `${finalPnl >= 0 ? 'Profit' : 'Loss'} of ${formatPnl} (${returnPctStr}) at ${symb}${newClose.toLocaleString()}`
                 )
 
-                // Close the position
+                // Close the position and reset simulation indicators
                 costBasisRef.current = null
+                simPositionExtremePriceRef.current = null
                 
                 // Set a 1-tick cool-down before scanning for next trade (approx 1 second of wait)
                 cooldownRef.current = 1
@@ -2112,6 +2538,29 @@ export default function Dashboard() {
   }, [activeMode, selectedSymbol])
 
   const handleModeSwitch = (mode) => {
+    // Sync mode change to backend database settings
+    const syncModeToBackend = async () => {
+      try {
+        const activeToken = token || localStorage.getItem('token');
+        if (activeToken) {
+          const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin;
+          await fetch(`${apiBase}/api/v1/auth/settings`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${activeToken}`
+            },
+            body: JSON.stringify({
+              active_mode: mode
+            })
+          });
+        }
+      } catch (e) {
+        console.error('Failed to sync mode change to backend settings:', e);
+      }
+    };
+    syncModeToBackend();
+
     if (mode === 'real') {
       const btn = document.getElementById('btn-real')
       if (btn) btn.classList.add('real-switch-pulse')
@@ -2131,6 +2580,230 @@ export default function Dashboard() {
       setTodayPnl(realizedTodayPnl)
     }
   }
+
+  // AI-Powered Trading Intelligence Functions
+  const getApiBase = () => {
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
+  }
+
+  const fetchAiSettings = async () => {
+    try {
+      const activeToken = token || localStorage.getItem('token')
+      const res = await fetch(`${getApiBase()}/api/v1/ai/settings?t=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        console.log("[SETTINGS-FETCH] Loaded settings from backend. AI candle interval:", data.ai_candle_interval)
+        setYoutubeApiKey(data.youtube_api_key)
+        setClaudeApiKey(data.claude_api_key)
+        setClaudeModel(data.claude_model || 'google/gemini-2.5-flash:free')
+        setAiConsultationMode(data.ai_consultation_mode)
+        setAiDailyBudget(data.ai_daily_budget)
+        setAiCandleInterval(data.ai_candle_interval || '30s')
+      }
+    } catch (e) {
+      console.error('Error fetching AI settings:', e)
+    }
+  }
+
+  const fetchAiStatus = async () => {
+    try {
+      const activeToken = token || localStorage.getItem('token')
+      const res = await fetch(`${getApiBase()}/api/v1/ai/status?t=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiStatus(data)
+      }
+    } catch (e) {
+      console.error('Error fetching AI status:', e)
+    }
+  }
+
+  const saveAiSettings = async () => {
+    setSaveKeysStatus('Saving...')
+    try {
+      const activeToken = token || localStorage.getItem('token')
+      const res = await fetch(`${getApiBase()}/api/v1/ai/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({
+          youtube_api_key: youtubeApiKey,
+          claude_api_key: claudeApiKey,
+          claude_model: claudeModel,
+          ai_consultation_mode: aiConsultationMode,
+          ai_daily_budget: parseFloat(aiDailyBudget),
+          ai_candle_interval: aiCandleInterval
+        })
+      })
+      if (res.ok) {
+        setSaveKeysStatus('Success! Settings saved.')
+        setTimeout(() => setSaveKeysStatus(''), 3000)
+        fetchAiStatus()
+      } else {
+        setSaveKeysStatus('Failed to save settings.')
+      }
+    } catch (e) {
+      console.error('Error saving AI settings:', e)
+      setSaveKeysStatus('Error saving settings.')
+    }
+  }
+
+
+  const handleAiConsult = async () => {
+    setAiConsulting(true)
+    setAiConsultResult(null)
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/consult`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          symbol: selectedSymbol,
+          issue_type: 'manual'
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiConsultResult(data)
+        fetchAiStatus()
+        fetchConsultationsLog()
+      } else {
+        const err = await res.json()
+        setAiConsultResult({ success: false, response: err.detail || 'Consultation failed.' })
+      }
+    } catch (e) {
+      console.error('Error during AI consult:', e)
+      setAiConsultResult({ success: false, response: 'Error during consultation. Ensure backend is running.' })
+    } finally {
+      setAiConsulting(false)
+    }
+  }
+
+  const searchYouTube = async () => {
+    setYtLoading(true)
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/youtube/search?q=${encodeURIComponent(ytSearchQuery)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setYtVideos(data)
+      }
+    } catch (e) {
+      console.error('Error searching YouTube:', e)
+    } finally {
+      setYtLoading(false)
+    }
+  }
+
+  const learnFromVideo = async (video) => {
+    setYtLearningId(video.video_id)
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/youtube/learn`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          video_id: video.video_id,
+          title: video.title,
+          channel: video.channel,
+          description: video.description
+        })
+      })
+      if (res.ok) {
+        fetchAiStatus()
+        fetchKnowledgeBase()
+        alert(`Successfully extracted rules for: "${video.title}". It has been saved to the Strategy Knowledge Base!`)
+      }
+    } catch (e) {
+      console.error('Error learning from video:', e)
+    } finally {
+      setYtLearningId(null)
+    }
+  }
+
+  const fetchKnowledgeBase = async () => {
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/knowledge`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setKnowledgeBase(data)
+      }
+    } catch (e) {
+      console.error('Error fetching knowledge base:', e)
+    }
+  }
+
+  const fetchConsultationsLog = async () => {
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/consultations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setConsultationsLog(data)
+      }
+    } catch (e) {
+      console.error('Error fetching consultations log:', e)
+    }
+  }
+
+  const handleRunBacktest = async (strategyId) => {
+    setIsBacktesting(true)
+    setBacktestResult(null)
+    setShowBacktestModal(true)
+    try {
+      const res = await fetch(`${getApiBase()}/api/v1/ai/backtest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          strategy_id: strategyId,
+          symbol: selectedSymbol,
+          mode: 'demo'
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setBacktestResult(data)
+        // Refresh knowledge base to update confidence ratings
+        fetchKnowledgeBase()
+      } else {
+        const errData = await res.json()
+        setBacktestResult({ success: false, error: errData.error || 'Failed to complete backtest' })
+      }
+    } catch (e) {
+      console.error('Error running backtest:', e)
+      setBacktestResult({ success: false, error: 'Network error occurred during backtest execution.' })
+    } finally {
+      setIsBacktesting(false)
+    }
+  }
+
+  // Load AI data when tab is active
+  useEffect(() => {
+    if (currentTab === 'aibrain') {
+      fetchAiSettings()
+      fetchAiStatus()
+      fetchKnowledgeBase()
+      fetchConsultationsLog()
+      searchYouTube()
+    }
+  }, [currentTab])
 
   const startRetraining = async () => {
     if (isRetraining) return
@@ -2224,6 +2897,7 @@ export default function Dashboard() {
   const clearTradeHistory = async () => {
     if (window.confirm('Are you sure you want to clear all trade history entries?')) {
       setTradeHistory([])
+      setChartMarkers([])
       localStorage.setItem('tradeHistory', JSON.stringify([]))
       try {
         const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
@@ -2243,6 +2917,7 @@ export default function Dashboard() {
         realAccountPnlRef.current = 0.00
         setRealAccountPnl(0.00)
         setTodayPnl(0.00)
+        setChartMarkers([])
         fetchRealBalance()
         try {
           const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
@@ -2252,13 +2927,16 @@ export default function Dashboard() {
         }
       }
     } else {
-      if (window.confirm('Reset wallet total balance back to starting $10,000.00?')) {
-        realizedBalanceRef.current = 10000.00
+      const startingAmt = isCryptoActive ? 10.00 : 100.00
+      const startingSymbol = isCryptoActive ? '$' : '₹'
+      if (window.confirm(`Reset wallet total balance back to starting ${startingSymbol}${startingAmt.toLocaleString()}?`)) {
+        realizedBalanceRef.current = startingAmt
         realizedTodayPnlRef.current = 0.00
-        setRealizedBalance(10000.00)
+        setRealizedBalance(startingAmt)
         setRealizedTodayPnl(0.00)
-        setBalance(10000.00)
+        setBalance(startingAmt)
         setTodayPnl(0.00)
+        setChartMarkers([])
         try {
           const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
           await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { method: 'POST' })
@@ -2276,18 +2954,20 @@ export default function Dashboard() {
     localStorage.setItem('tradeLogs', JSON.stringify([]))
   }
 
-  const totalLedgerPnl = tradeHistory.reduce((acc, t) => {
-    const val = parseFloat(t.profit.replace('+$', '').replace('-$', '-').replace('$', '')) || 0
+  const completedTrades = tradeHistory.filter(t => t.action !== 'BUY')
+
+  const totalLedgerPnl = completedTrades.reduce((acc, t) => {
+    const val = parseFloat(t.profit.replace(/[+₹$\s,]/g, '')) || 0
     return acc + val
   }, 0)
 
-  const totalLedgerVolume = tradeHistory.reduce((acc, t) => {
-    const val = parseFloat((t.investment || '0').replace('$', '').replace(/,/g, '')) || 0
+  const totalLedgerVolume = completedTrades.reduce((acc, t) => {
+    const val = parseFloat((t.investment || '0').replace(/[₹$\s,]/g, '')) || 0
     return acc + val
   }, 0)
 
-  const winCount = tradeHistory.filter(t => t.status === 'TARGET HIT' || t.profit.startsWith('+')).length
-  const totalCount = tradeHistory.length
+  const winCount = completedTrades.filter(t => t.status === 'TARGET HIT' || t.profit.startsWith('+')).length
+  const totalCount = completedTrades.length
   const winRatePct = totalCount > 0 ? ((winCount / totalCount) * 100).toFixed(1) : '0.0'
 
   return (
@@ -2367,6 +3047,18 @@ export default function Dashboard() {
             <span className="material-symbols-outlined text-xl">insights</span>
             <span className="text-sm font-semibold">Signals</span>
           </button>
+
+          <button
+            onClick={() => setCurrentTab('aibrain')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all cursor-pointer ${
+              currentTab === 'aibrain' 
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-[#162035]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">psychology</span>
+            <span className="text-sm font-semibold">AI Brain</span>
+          </button>
         </nav>
         
         <div className="p-6 border-t border-[#1E2D4A] bg-[#080C18]/50">
@@ -2427,9 +3119,9 @@ export default function Dashboard() {
               <span className="text-slate-400 mr-1 text-[9px] md:text-[10px] uppercase font-bold hidden sm:inline">BAL:</span>
               <span className="font-bold text-cyan-400">
                 {getPortfolioCurrencySymbol()}{
-                  (balance * 100) % 1 !== 0
-                    ? balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-                    : balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  (displayedBalance * 100) % 1 !== 0
+                    ? displayedBalance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+                    : displayedBalance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 }
               </span>
             </div>
@@ -2471,13 +3163,31 @@ export default function Dashboard() {
                     {notifications.length === 0 ? (
                       <p className="text-xs text-slate-500 text-center py-4">No new notifications</p>
                     ) : (
-                      notifications.map(n => (
-                        <div key={n.id} className="text-xs border-b border-[#1E2D4A]/40 pb-2 last:border-0 last:pb-0">
-                          <p className="font-bold text-white mb-0.5">{n.title}</p>
-                          <p className="text-slate-400 text-[11px] leading-relaxed">{n.desc}</p>
-                          <span className="text-[10px] text-slate-500 mt-1 block">{n.time}</span>
-                        </div>
-                      ))
+                      notifications.map(n => {
+                        let cardClass = "text-xs border-b border-[#1E2D4A]/40 pb-2 last:border-0 last:pb-0";
+                        if (n.action === 'AI_APPROVED') {
+                          cardClass = "text-xs bg-emerald-500/5 border-l-2 border-emerald-500 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0";
+                        } else if (n.action === 'AI_REJECTED') {
+                          cardClass = "text-xs bg-red-500/5 border-l-2 border-red-500 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0";
+                        } else if (n.action === 'AI_ANALYZING') {
+                          cardClass = "text-xs bg-cyan-500/5 border-l-2 border-cyan-400 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0 animate-pulse";
+                        } else if (n.action === 'BUY') {
+                          cardClass = "text-xs bg-emerald-500/5 border-l-2 border-emerald-500/50 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0";
+                        } else if (n.action === 'CLOSE') {
+                          const isWin = n.title.includes('TARGET') || n.title.includes('PROFIT');
+                          cardClass = isWin 
+                            ? "text-xs bg-emerald-500/5 border-l-2 border-emerald-500/50 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0"
+                            : "text-xs bg-red-500/5 border-l-2 border-red-500/50 pl-2.5 py-1.5 rounded-r border-b border-[#1E2D4A]/20 last:border-0 my-1 first:mt-0";
+                        }
+                        
+                        return (
+                          <div key={n.id} className={cardClass}>
+                            <p className="font-bold text-white mb-0.5">{n.title}</p>
+                            <p className="text-slate-400 text-[11px] leading-relaxed">{n.desc}</p>
+                            <span className="text-[10px] text-slate-500 mt-1 block">{n.time}</span>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -2630,6 +3340,22 @@ export default function Dashboard() {
                       </label>
                     </div>
 
+                    {/* Allowed Trade Direction dropdown select */}
+                    <div className="border-t border-[#1E2D4A]/50 pt-3">
+                      <div className="flex justify-between mb-1.5">
+                        <span className="text-slate-400">Allowed Trade Direction</span>
+                      </div>
+                      <select 
+                        value={tradeDirection}
+                        onChange={(e) => setTradeDirection(e.target.value)}
+                        className="w-full bg-[#162035] text-cyan-400 border border-[#1E2D4A] rounded-lg p-2 text-xs font-bold focus:outline-none"
+                      >
+                        <option value="BOTH">BOTH (LONG & SHORT Trades)</option>
+                        <option value="LONG_ONLY">LONG ONLY (Recommended for Nifty 50)</option>
+                        <option value="SHORT_ONLY">SHORT ONLY (Bearish Trades Only)</option>
+                      </select>
+                    </div>
+
                     {/* Desktop Browser Notifications */}
                     <div className="flex items-center justify-between border-t border-[#1E2D4A]/50 pt-3">
                       <span className="text-slate-400">Desktop Notifications</span>
@@ -2707,29 +3433,31 @@ export default function Dashboard() {
                     </div>
                     <div className="border-t border-[#1E2D4A]/50 pt-3">
                       <div className="flex justify-between mb-1.5">
-                        <span className="text-slate-400">Trade Size (Investment)</span>
-                        <span className="text-cyan-400 font-bold">{getPortfolioCurrencySymbol()}{tradeInvestment.toLocaleString()}</span>
+                        <span className="text-slate-400">Auto-Trade Shares</span>
+                        <span className="text-cyan-400 font-bold">
+                          {tradeShares} {isCryptoActive ? 'Units' : 'Shares'}
+                        </span>
                       </div>
                       <input 
                         type="range" 
-                        min={getPortfolioCurrencySymbol() === '$' ? 5 : 10} 
-                        max="5000" 
-                        step="5"
-                        value={tradeInvestment}
-                        onChange={(e) => setTradeInvestment(parseFloat(e.target.value))}
+                        min={isCryptoActive ? 0.001 : 1} 
+                        max={isCryptoActive ? 10 : 1000} 
+                        step={isCryptoActive ? 0.001 : 1}
+                        value={tradeShares}
+                        onChange={(e) => setTradeShares(parseFloat(e.target.value))}
                         className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer mb-2.5"
                       />
                       <div className="grid grid-cols-6 gap-1">
-                        {(getPortfolioCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map(amt => (
+                        {(isCryptoActive ? [0.001, 0.01, 0.1, 0.5, 1.0, 5.0] : [1, 2, 5, 10, 50, 100]).map(amt => (
                           <button
                             key={amt}
                             type="button"
-                            onClick={() => setTradeInvestment(amt)}
+                            onClick={() => setTradeShares(amt)}
                             className={`py-1 rounded text-[9px] font-mono-data border cursor-pointer transition-all text-center ${
-                              tradeInvestment === amt ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-[#162035] border-[#1E2D4A] text-slate-400 hover:text-white'
+                              tradeShares === amt ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-[#162035] border-[#1E2D4A] text-slate-400 hover:text-white'
                             }`}
                           >
-                            {getPortfolioCurrencySymbol()}{amt}
+                            {amt}
                           </button>
                         ))}
                       </div>
@@ -2957,6 +3685,19 @@ export default function Dashboard() {
                             className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-white font-mono-data outline-none focus:border-cyan-400"
                           />
                         </div>
+                        
+                        <div>
+                          <label className="text-[9px] text-slate-500 uppercase font-bold">Allowed Trade Direction</label>
+                          <select 
+                            value={tradeDirection}
+                            onChange={(e) => setTradeDirection(e.target.value)}
+                            className="w-full bg-[#090D1A] border border-[#1E2D4A] rounded-lg px-2 py-1 text-[11px] text-cyan-400 font-mono-data outline-none"
+                          >
+                            <option value="BOTH">BOTH (LONG & SHORT Trades)</option>
+                            <option value="LONG_ONLY">LONG ONLY (Recommended for Nifty 50)</option>
+                            <option value="SHORT_ONLY">SHORT ONLY (Bearish Trades Only)</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                     
@@ -2965,6 +3706,7 @@ export default function Dashboard() {
                         localStorage.setItem('brokerGateway', brokerGateway)
                         localStorage.setItem('brokerApiKey', brokerApiKey)
                         localStorage.setItem('brokerApiSecret', brokerApiSecret)
+                        localStorage.setItem('tradeDirection', tradeDirection)
                         try {
                           const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
                           await fetch(`${apiBase}/api/v1/auth/settings`, {
@@ -2992,7 +3734,9 @@ export default function Dashboard() {
                               enable_trailing_stop: enableTrailingStop,
                               auto_start_on_login: autoStartOnLogin,
                               trade_investment_usd: tradeInvestmentUSD,
-                              trade_investment_inr: tradeInvestmentINR
+                              trade_investment_inr: tradeInvestmentINR,
+                              trade_shares: tradeShares,
+                              trade_direction: tradeDirection
                             })
                           })
                           updateUser({
@@ -3131,7 +3875,7 @@ export default function Dashboard() {
                     <button
                       onClick={resetWalletBalance}
                       className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center space-x-1"
-                      title={`Reset Wallet Balance back to starting ${getPortfolioCurrencySymbol()}${10000.00.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN')}`}
+                      title={`Reset Wallet Balance back to starting ${getPortfolioCurrencySymbol()}${(getPortfolioCurrencySymbol() === '$' ? 10.00 : 100.00).toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN')}`}
                     >
                       <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                       <span>Reset</span>
@@ -3141,9 +3885,9 @@ export default function Dashboard() {
                     <p className="text-[10px] text-slate-500">Total Balance</p>
                     <h2 className={`text-2xl md:text-3xl font-mono-data font-bold text-white tracking-tight ${isPriceFlashing ? 'price-flash' : ''}`}>
                       {getPortfolioCurrencySymbol()}{
-                        (balance * 100) % 1 !== 0
-                          ? balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-                          : balance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        (displayedBalance * 100) % 1 !== 0
+                          ? displayedBalance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+                          : displayedBalance.toLocaleString(getPortfolioCurrencySymbol() === '$' ? 'en-US' : 'en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                       }
                     </h2>
                   </div>
@@ -3256,8 +4000,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Open Positions Card (Real Mode only) */}
-              {activeMode === 'real' && (
+              {/* Open Positions Card (Show in both Demo and Real modes) */}
+              {true && (
                 <div className="premium-card rounded-xl p-6 my-4 border border-cyan-500/20 bg-[#080C18]/60 shadow-[0_0_15px_rgba(0,180,255,0.05)]">
                   <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E2D4A]/50">
                     <div className="flex items-center space-x-2">
@@ -3306,8 +4050,11 @@ export default function Dashboard() {
                             // Find matching tick price from chartData
                             const lastCandle = chartData && chartData.length > 0 ? chartData[chartData.length - 1] : null;
                             const currentPrice = sym === selectedSymbol && lastCandle ? lastCandle.close : pos.entry_price;
+                            
+                            const direction = pos.direction === 'SHORT' ? 'SHORT' : 'LONG';
                             const diffPct = ((currentPrice - pos.entry_price) / pos.entry_price) * 100;
-                            const leveragedPnlPct = diffPct * 10; // 10X Leverage
+                            const rawLeveragedPnlPct = diffPct * 10; // 10X Leverage
+                            const leveragedPnlPct = direction === 'SHORT' ? -rawLeveragedPnlPct : rawLeveragedPnlPct;
                             const pnlAmount = (pos.qty * pos.entry_price) * (leveragedPnlPct / 100);
                             const isProfit = leveragedPnlPct >= 0;
 
@@ -3317,47 +4064,56 @@ export default function Dashboard() {
                             const mult = target_str === '1.2X' ? 1.2 : (target_str === '2.0X' ? 2.0 : 1.5);
                             const targetPct = slLimit * mult;
                             
-                            const targetPrice = pos.entry_price * (1 + targetPct / 100);
-                            const stopLossPrice = pos.entry_price * (1 - slLimit / 100);
+                            const targetPrice = pos.target_price || (direction === 'SHORT'
+                              ? pos.entry_price * (1 - targetPct / 100)
+                              : pos.entry_price * (1 + targetPct / 100));
+                            const stopLossPrice = pos.stop_loss_price || (direction === 'SHORT'
+                              ? pos.entry_price * (1 + slLimit / 100)
+                              : pos.entry_price * (1 - slLimit / 100));
                             
-                            const possibleWin = (pos.qty * pos.entry_price) * (targetPct * 10 / 100);
-                            const possibleLoss = (pos.qty * pos.entry_price) * (slLimit * 10 / 100);
+                            const possibleWin = Math.abs(targetPrice - pos.entry_price) * pos.qty;
+                            const possibleLoss = Math.abs(stopLossPrice - pos.entry_price) * pos.qty;
+                            const currencySym = getCurrencySymbol(sym);
 
                             return (
                               <tr key={sym} className="text-white hover:bg-slate-500/5">
                                 <td className="py-2.5 font-sans font-bold text-cyan-400">{sym}</td>
                                 <td className="py-2.5">
-                                  <span className="px-1.5 py-0.5 bg-[#00E676]/10 border border-[#00E676]/20 text-[#00E676] rounded text-[9px] font-bold">
-                                    BUY / LONG
+                                  <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold ${
+                                    direction === 'SHORT'
+                                      ? 'bg-[#FF3D57]/10 border-[#FF3D57]/20 text-[#FF3D57]'
+                                      : 'bg-[#00E676]/10 border-[#00E676]/20 text-[#00E676]'
+                                  }`}>
+                                    {direction === 'SHORT' ? 'SELL / SHORT' : 'BUY / LONG'}
                                   </span>
                                 </td>
                                 <td className="py-2.5 text-slate-300">
                                   {(() => {
                                     const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
-                                    const leverage = isCrypto ? 10 : 5;
+                                    const leverage = 10;
                                     const marginBlocked = (pos.qty * pos.entry_price) / leverage;
                                     const totalValue = pos.qty * pos.entry_price;
                                     return (
                                       <>
                                         <div className="font-bold">{pos.qty} {isCrypto ? 'Units' : 'Shares'}</div>
-                                        <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {getCurrencySymbol(sym)}{marginBlocked.toFixed(2)}</div>
-                                        <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {getCurrencySymbol(sym)}{totalValue.toFixed(2)}</div>
+                                        <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {currencySym}{marginBlocked.toFixed(2)}</div>
+                                        <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {currencySym}{totalValue.toFixed(2)}</div>
                                       </>
                                     );
                                   })()}
                                 </td>
-                                <td className="py-2.5 text-slate-300">₹{pos.entry_price.toFixed(2)}</td>
-                                <td className="py-2.5 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                                <td className="py-2.5 text-slate-300">{currencySym}{pos.entry_price.toFixed(2)}</td>
+                                <td className="py-2.5 text-slate-300">{currencySym}{currentPrice.toFixed(2)}</td>
                                 <td className="py-2.5 text-slate-300">
-                                  <div className="text-[11px] text-[#00E676] font-bold">🎯 ₹{targetPrice.toFixed(2)}</div>
-                                  <div className="text-[9px] text-[#FF3D57]">🛡️ ₹{stopLossPrice.toFixed(2)}</div>
+                                  <div className="text-[11px] text-[#00E676] font-bold">🎯 {currencySym}{targetPrice.toFixed(2)}</div>
+                                  <div className="text-[9px] text-[#FF3D57]">🛡️ {currencySym}{stopLossPrice.toFixed(2)}</div>
                                 </td>
                                 <td className="py-2.5 text-right font-semibold">
-                                  <div className="text-[11px] text-[#00E676] font-bold">+{getCurrencySymbol(sym)}{possibleWin.toFixed(2)}</div>
-                                  <div className="text-[9px] text-[#FF3D57]">-{getCurrencySymbol(sym)}{possibleLoss.toFixed(2)}</div>
+                                  <div className="text-[11px] text-[#00E676] font-bold">+{currencySym}{possibleWin.toFixed(2)}</div>
+                                  <div className="text-[9px] text-[#FF3D57]">-{currencySym}{possibleLoss.toFixed(2)}</div>
                                 </td>
                                 <td className={`py-2.5 text-right font-bold ${isProfit ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                  {isProfit ? '+' : ''}₹{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
+                                  {isProfit ? '+' : ''}{currencySym}{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
                                 </td>
                               </tr>
                             );
@@ -3375,17 +4131,33 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined text-xs mr-1 text-cyan-400">show_chart</span>
                   Markets:
                 </span>
-                {visibleMarkets.map((pair) => (
-                  <div key={pair} className="relative flex items-center">
-                    <button
-                      onClick={() => setSelectedSymbol(pair)}
-                      className={`pl-3 pr-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
-                        selectedSymbol === pair
-                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
-                          : 'bg-[#0A0F1D] border-[#1E2D4A] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <span>{pair}</span>
+                {visibleMarkets.map((pair) => {
+                  const pairKey = pair.replace('/', '').replace(' ', '').toUpperCase()
+                  const priceVal = marketPrices[pairKey]
+                  const isCrypto = pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('ADA')
+                  const leverage = 10
+                  const marginVal = priceVal ? (priceVal / leverage) : null
+                  return (
+                    <div key={pair} className="relative flex items-center">
+                      <button
+                        onClick={() => setSelectedSymbol(pair)}
+                        className={`pl-3 pr-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
+                          selectedSymbol === pair
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                            : 'bg-[#0A0F1D] border-[#1E2D4A] text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span>
+                          {pair}
+                          {priceVal ? (
+                            <span className="text-[9px] text-slate-400 ml-1">
+                              {getCurrencySymbol(pair)}{priceVal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}
+                              <span className="text-cyan-400 ml-1">
+                                (Margin: {getCurrencySymbol(pair)}{marginVal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})})
+                              </span>
+                            </span>
+                          ) : ''}
+                        </span>
                       {visibleMarkets.length > 1 && (
                         <span
                           onClick={(e) => {
@@ -3404,7 +4176,8 @@ export default function Dashboard() {
                       )}
                     </button>
                   </div>
-                ))}
+                  )
+                })}
                 
                 {/* Search & Add Market input */}
                 <div ref={marketSearchRef} className="relative flex items-center z-50">
@@ -3423,7 +4196,7 @@ export default function Dashboard() {
                         if (e.key === 'Enter' && marketSearchQuery.trim()) {
                           e.preventDefault()
                           const q = marketSearchQuery.trim().toUpperCase()
-                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                           const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
                           if (!visibleMarkets.includes(matched)) {
                             setVisibleMarkets(prev => [...prev, matched])
@@ -3439,7 +4212,7 @@ export default function Dashboard() {
                       <button
                         onClick={() => {
                           const q = marketSearchQuery.trim().toUpperCase()
-                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                           const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
                           if (!visibleMarkets.includes(matched)) {
                             setVisibleMarkets(prev => [...prev, matched])
@@ -3459,7 +4232,7 @@ export default function Dashboard() {
                   {isSearchDropdownOpen && (
                     <div className="absolute left-0 top-full mt-1.5 w-44 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
                       {(() => {
-                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                         const filtered = allAvailableMarkets.filter(
                           (m) =>
                             !visibleMarkets.includes(m) &&
@@ -3562,7 +4335,7 @@ export default function Dashboard() {
                       {['1s', '1m', '5m', '15m', '1h', '1d'].map((tf) => (
                         <button
                           key={tf}
-                          onClick={() => setTimeframe(tf)}
+                          onClick={() => handleTimeframeChange(tf)}
                           className={`px-2 py-0.5 md:px-2.5 md:py-1 text-[10px] font-bold rounded transition-all cursor-pointer uppercase ${
                             timeframe === tf 
                               ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
@@ -3679,17 +4452,33 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined text-sm mr-1 text-cyan-400">show_chart</span>
                   Select Market:
                 </span>
-                {visibleMarkets.map((pair) => (
-                  <div key={pair} className="relative flex items-center">
-                    <button
-                      onClick={() => setSelectedSymbol(pair)}
-                      className={`pl-3 pr-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
-                        selectedSymbol === pair
-                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
-                          : 'bg-[#111827] border-[#1E2D4A] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <span>{pair}</span>
+                {visibleMarkets.map((pair) => {
+                  const pairKey = pair.replace('/', '').replace(' ', '').toUpperCase()
+                  const priceVal = marketPrices[pairKey]
+                  const isCrypto = pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('ADA')
+                  const leverage = 10
+                  const marginVal = priceVal ? (priceVal / leverage) : null
+                  return (
+                    <div key={pair} className="relative flex items-center">
+                      <button
+                        onClick={() => setSelectedSymbol(pair)}
+                        className={`pl-3 pr-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center space-x-1.5 ${
+                          selectedSymbol === pair
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,200,255,0.2)]'
+                            : 'bg-[#111827] border-[#1E2D4A] text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span>
+                          {pair}
+                          {priceVal ? (
+                            <span className="text-[9px] text-slate-400 ml-1">
+                              {getCurrencySymbol(pair)}{priceVal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}
+                              <span className="text-cyan-400 ml-1">
+                                (Margin: {getCurrencySymbol(pair)}{marginVal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})})
+                              </span>
+                            </span>
+                          ) : ''}
+                        </span>
                       {visibleMarkets.length > 1 && (
                         <span
                           onClick={(e) => {
@@ -3708,7 +4497,8 @@ export default function Dashboard() {
                       )}
                     </button>
                   </div>
-                ))}
+                  )
+                })}
 
                 {/* Search & Add Market input */}
                 <div ref={marketSearchRef2} className="relative flex items-center z-50">
@@ -3727,7 +4517,7 @@ export default function Dashboard() {
                         if (e.key === 'Enter' && marketSearchQuery2.trim()) {
                           e.preventDefault()
                           const q = marketSearchQuery2.trim().toUpperCase()
-                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                           const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
                           if (!visibleMarkets.includes(matched)) {
                             setVisibleMarkets(prev => [...prev, matched])
@@ -3743,7 +4533,7 @@ export default function Dashboard() {
                       <button
                         onClick={() => {
                           const q = marketSearchQuery2.trim().toUpperCase()
-                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                          const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                           const matched = allAvailableMarkets.find(m => m.toUpperCase() === q || m.toUpperCase().includes(q)) || q
                           if (!visibleMarkets.includes(matched)) {
                             setVisibleMarkets(prev => [...prev, matched])
@@ -3763,7 +4553,7 @@ export default function Dashboard() {
                   {isSearchDropdownOpen2 && (
                     <div className="absolute left-0 top-full mt-1.5 w-44 bg-[#0A0F1D] border border-[#1E2D4A] rounded-lg shadow-2xl z-[100] max-h-48 overflow-y-auto py-1">
                       {(() => {
-                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
+                        const allAvailableMarkets = ['NIFTY 50', 'SENSEX', 'RELIANCE', 'TCS', 'RPOWER', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'TATAMOTORS', 'WIPRO']
                         const filtered = allAvailableMarkets.filter(
                           (m) =>
                             !visibleMarkets.includes(m) &&
@@ -3862,7 +4652,7 @@ export default function Dashboard() {
                       {['1s', '1m', '5m', '15m', '1h', '1d'].map((tf) => (
                         <button
                           key={tf}
-                          onClick={() => setTimeframe(tf)}
+                          onClick={() => handleTimeframeChange(tf)}
                           className={`px-2 py-0.5 md:px-2.5 md:py-1 text-[10px] font-bold rounded transition-all cursor-pointer uppercase ${
                             timeframe === tf 
                               ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
@@ -4020,8 +4810,8 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Open Positions Card (Real Mode only) */}
-                {activeMode === 'real' && (
+                {/* Open Positions Card (Show in both Demo and Real modes) */}
+                {true && (
                   <div className="premium-card rounded-xl p-6 mb-6 border border-cyan-500/20 bg-[#080C18]/60 shadow-[0_0_15px_rgba(0,180,255,0.05)]">
                     <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E2D4A]/50">
                       <div className="flex items-center space-x-2">
@@ -4070,8 +4860,11 @@ export default function Dashboard() {
                               // Find matching tick price from chartData
                               const lastCandle = chartData && chartData.length > 0 ? chartData[chartData.length - 1] : null;
                               const currentPrice = sym === selectedSymbol && lastCandle ? lastCandle.close : pos.entry_price;
+                              
+                              const direction = pos.direction === 'SHORT' ? 'SHORT' : 'LONG';
                               const diffPct = ((currentPrice - pos.entry_price) / pos.entry_price) * 100;
-                              const leveragedPnlPct = diffPct * 10; // 10X Leverage
+                              const rawLeveragedPnlPct = diffPct * 10; // 10X Leverage
+                              const leveragedPnlPct = direction === 'SHORT' ? -rawLeveragedPnlPct : rawLeveragedPnlPct;
                               const pnlAmount = (pos.qty * pos.entry_price) * (leveragedPnlPct / 100);
                               const isProfit = leveragedPnlPct >= 0;
 
@@ -4081,47 +4874,56 @@ export default function Dashboard() {
                               const mult = target_str === '1.2X' ? 1.2 : (target_str === '2.0X' ? 2.0 : 1.5);
                               const targetPct = slLimit * mult;
                               
-                              const targetPrice = pos.entry_price * (1 + targetPct / 100);
-                              const stopLossPrice = pos.entry_price * (1 - slLimit / 100);
+                              const targetPrice = pos.target_price || (direction === 'SHORT'
+                                ? pos.entry_price * (1 - targetPct / 100)
+                                : pos.entry_price * (1 + targetPct / 100));
+                              const stopLossPrice = pos.stop_loss_price || (direction === 'SHORT'
+                                ? pos.entry_price * (1 + slLimit / 100)
+                                : pos.entry_price * (1 - slLimit / 100));
                               
-                              const possibleWin = (pos.qty * pos.entry_price) * (targetPct * 10 / 100);
-                              const possibleLoss = (pos.qty * pos.entry_price) * (slLimit * 10 / 100);
+                              const possibleWin = Math.abs(targetPrice - pos.entry_price) * pos.qty;
+                              const possibleLoss = Math.abs(stopLossPrice - pos.entry_price) * pos.qty;
+                              const currencySym = getCurrencySymbol(sym);
 
                               return (
                                 <tr key={sym} className="text-white hover:bg-slate-500/5">
                                   <td className="py-2.5 font-sans font-bold text-cyan-400">{sym}</td>
                                   <td className="py-2.5">
-                                    <span className="px-1.5 py-0.5 bg-[#00E676]/10 border border-[#00E676]/20 text-[#00E676] rounded text-[9px] font-bold">
-                                      BUY / LONG
+                                    <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold ${
+                                      direction === 'SHORT'
+                                        ? 'bg-[#FF3D57]/10 border-[#FF3D57]/20 text-[#FF3D57]'
+                                        : 'bg-[#00E676]/10 border-[#00E676]/20 text-[#00E676]'
+                                    }`}>
+                                      {direction === 'SHORT' ? 'SELL / SHORT' : 'BUY / LONG'}
                                     </span>
                                   </td>
                                   <td className="py-2.5 text-slate-300">
                                     {(() => {
                                       const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
-                                      const leverage = isCrypto ? 10 : 5;
+                                      const leverage = 10;
                                       const marginBlocked = (pos.qty * pos.entry_price) / leverage;
                                       const totalValue = pos.qty * pos.entry_price;
                                       return (
                                         <>
                                           <div className="font-bold">{pos.qty} {isCrypto ? 'Units' : 'Shares'}</div>
-                                          <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {getCurrencySymbol(sym)}{marginBlocked.toFixed(2)}</div>
-                                          <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {getCurrencySymbol(sym)}{totalValue.toFixed(2)}</div>
+                                          <div className="text-[10px] text-slate-400 font-sans" title="Blocked margin (actual investment)">Margin: {currencySym}{marginBlocked.toFixed(2)}</div>
+                                          <div className="text-[8px] text-slate-500 font-sans" title="Total position size">Total: {currencySym}{totalValue.toFixed(2)}</div>
                                         </>
                                       );
                                     })()}
                                   </td>
-                                  <td className="py-2.5 text-slate-300">₹{pos.entry_price.toFixed(2)}</td>
-                                  <td className="py-2.5 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                                  <td className="py-2.5 text-slate-300">{currencySym}{pos.entry_price.toFixed(2)}</td>
+                                  <td className="py-2.5 text-slate-300">{currencySym}{currentPrice.toFixed(2)}</td>
                                   <td className="py-2.5 text-slate-300">
-                                    <div className="text-[11px] text-[#00E676] font-bold">🎯 ₹{targetPrice.toFixed(2)}</div>
-                                    <div className="text-[9px] text-[#FF3D57]">🛡️ ₹{stopLossPrice.toFixed(2)}</div>
+                                    <div className="text-[11px] text-[#00E676] font-bold">🎯 {currencySym}{targetPrice.toFixed(2)}</div>
+                                    <div className="text-[9px] text-[#FF3D57]">🛡️ {currencySym}{stopLossPrice.toFixed(2)}</div>
                                   </td>
                                   <td className="py-2.5 text-right font-semibold">
-                                    <div className="text-[11px] text-[#00E676] font-bold">+{getCurrencySymbol(sym)}{possibleWin.toFixed(2)}</div>
-                                    <div className="text-[9px] text-[#FF3D57]">-{getCurrencySymbol(sym)}{possibleLoss.toFixed(2)}</div>
+                                    <div className="text-[11px] text-[#00E676] font-bold">+{currencySym}{possibleWin.toFixed(2)}</div>
+                                    <div className="text-[9px] text-[#FF3D57]">-{currencySym}{possibleLoss.toFixed(2)}</div>
                                   </td>
                                   <td className={`py-2.5 text-right font-bold ${isProfit ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                    {isProfit ? '+' : ''}₹{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
+                                    {isProfit ? '+' : ''}{currencySym}{pnlAmount.toFixed(2)} ({isProfit ? '+' : ''}{leveragedPnlPct.toFixed(2)}%)
                                   </td>
                                 </tr>
                               );
@@ -4180,53 +4982,254 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
+                    {/* Buy vs Sell Sub-Tabs Toggle */}
+                    <div className="flex border-b border-[#1E2D4A]/60 mb-6 space-x-6">
+                      <button
+                        onClick={() => setHistorySubTab('buy')}
+                        className={`pb-3 text-xs md:text-sm font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                          historySubTab === 'buy'
+                            ? 'text-cyan-400 border-b-2 border-cyan-400'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        📥 Buy Orders (Entries)
+                      </button>
+                      <button
+                        onClick={() => setHistorySubTab('sell')}
+                        className={`pb-3 text-xs md:text-sm font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                          historySubTab === 'sell'
+                            ? 'text-cyan-400 border-b-2 border-cyan-400'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        📤 Sell Orders (Exits)
+                      </button>
+                    </div>
 
-                    {/* Desktop View: Table Layout */}
-                    <div className="hidden md:block overflow-x-auto w-full max-w-full pb-4">
-                      <table className="w-full text-left border-collapse min-w-[750px]">
-                        <thead>
-                          <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                            <th className="py-4 px-6">Timestamp</th>
-                            <th className="py-4 px-6">Asset Pair</th>
-                            <th className="py-4 px-6">Position</th>
-                            <th className="py-4 px-6">Investment</th>
-                            <th className="py-4 px-6">Leverage</th>
-                            <th className="py-4 px-6">Buy Price</th>
-                            <th className="py-4 px-6">Sell Price</th>
-                            <th className="py-4 px-6">Net Profit</th>
-                            <th className="py-4 px-6">Return</th>
-                            <th className="py-4 px-6">Trigger Reason</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
-                          {tradeHistory.map((trade) => (
-                              <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
-                                <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
-                                <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
-                                <td className="py-4 px-6">
+                    {(() => {
+                      const activeTradesList = historySubTab === 'buy'
+                        ? tradeHistory.filter(t => t.action === 'BUY')
+                        : tradeHistory.filter(t => t.action === 'SELL' || !t.action);
+
+                      if (activeTradesList.length === 0) {
+                        return (
+                          <div className="text-center py-12 border border-dashed border-[#1E2D4A]/60 rounded-xl my-4">
+                            <span className="material-symbols-outlined text-slate-600 text-3xl mb-2">info</span>
+                            <p className="text-xs font-bold text-slate-400">
+                              {historySubTab === 'buy' ? 'No active buy orders recorded yet.' : 'No closed sell orders recorded yet.'}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <>
+                          {/* Desktop View: Table Layout */}
+                          <div className="hidden md:block overflow-x-auto w-full max-w-full pb-4">
+                            {historySubTab === 'buy' ? (
+                              <table className="w-full text-left border-collapse min-w-[750px]">
+                                <thead>
+                                  <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                                    <th className="py-4 px-6">Timestamp</th>
+                                    <th className="py-4 px-6">Asset Pair</th>
+                                    <th className="py-4 px-6">Position</th>
+                                    <th className="py-4 px-6">Investment</th>
+                                    <th className="py-4 px-6">Leverage</th>
+                                    <th className="py-4 px-6">Buy Price</th>
+                                    <th className="py-4 px-6">Sell Target Price</th>
+                                    <th className="py-4 px-6">Sell Target Profit</th>
+                                    <th className="py-4 px-6">Highest/Lowest Price</th>
+                                    <th className="py-4 px-6">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
+                                  {activeTradesList.map((trade) => (
+                                    <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
+                                      <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
+                                      <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
+                                      <td className="py-4 px-6">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                          trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
+                                        }`}>
+                                          {trade.type}
+                                        </span>
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment}</td>
+                                      <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
+                                      <td className="py-4 px-6 font-mono-data text-slate-300">
+                                        {trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-yellow-400 font-bold">
+                                        {trade.targetPrice ? `${getCurrencySymbol(trade.pair)}${trade.targetPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-[#00E676] font-bold">
+                                        {(() => {
+                                          if (!trade.entryPrice || !trade.targetPrice) return '—'
+                                          const isShort = trade.type === 'SHORT'
+                                          const rawDiff = isShort 
+                                            ? (trade.entryPrice - trade.targetPrice) / trade.entryPrice 
+                                            : (trade.targetPrice - trade.entryPrice) / trade.entryPrice
+                                          const pnlPct = rawDiff * 10 * 100 // 10X leverage
+                                          const investNum = parseFloat(trade.investment.replace(/[^0-9.]/g, '')) || 0
+                                          const profitAmt = investNum * (pnlPct / 100)
+                                          return `+${getCurrencySymbol(trade.pair)}${profitAmt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (+${pnlPct.toFixed(2)}%)`
+                                        })()}
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-emerald-400 font-bold">
+                                        <div className="flex flex-col">
+                                          <span>{trade.highestPrice ? `${getCurrencySymbol(trade.pair)}${trade.highestPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}</span>
+                                          {trade.highestPrice && (
+                                            <span className="text-[9px] text-slate-500 font-normal uppercase tracking-wider mt-0.5">
+                                              {trade.type === 'LONG' ? 'Highest' : 'Lowest'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#00E676]/10 text-[#00E676] border border-[#00E676]/30 animate-pulse">
+                                          {trade.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <table className="w-full text-left border-collapse min-w-[750px]">
+                                <thead>
+                                  <tr className="border-b border-[#1E2D4A] text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                                    <th className="py-4 px-6">Timestamp</th>
+                                    <th className="py-4 px-6">Asset Pair</th>
+                                    <th className="py-4 px-6">Position</th>
+                                    <th className="py-4 px-6">Investment</th>
+                                    <th className="py-4 px-6">Leverage</th>
+                                    <th className="py-4 px-6">Buy Price</th>
+                                    <th className="py-4 px-6">Highest/Lowest Price</th>
+                                    <th className="py-4 px-6">Sell Price</th>
+                                    <th className="py-4 px-6">Net Profit</th>
+                                    <th className="py-4 px-6">Return</th>
+                                    <th className="py-4 px-6">Trigger Reason</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#1E2D4A]/50 text-xs">
+                                  {activeTradesList.map((trade) => (
+                                    <tr key={trade.id} className="hover:bg-[#162035] transition-colors">
+                                      <td className="py-4 px-6 font-mono-data text-slate-400">{trade.date}</td>
+                                      <td className="py-4 px-6 font-bold text-white">{trade.pair}</td>
+                                      <td className="py-4 px-6">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                          trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
+                                        }`}>
+                                          {trade.type}
+                                        </span>
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment}</td>
+                                      <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
+                                      <td className="py-4 px-6 font-mono-data text-slate-300">
+                                        {trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-emerald-400 font-bold">
+                                        <div className="flex flex-col">
+                                          <span>{trade.highestPrice ? `${getCurrencySymbol(trade.pair)}${trade.highestPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}</span>
+                                          {trade.highestPrice && (
+                                            <span className="text-[9px] text-slate-500 font-normal uppercase tracking-wider mt-0.5">
+                                              {trade.type === 'LONG' ? 'Highest' : 'Lowest'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6 font-mono-data text-slate-300">
+                                        {trade.exitPrice ? `${getCurrencySymbol(trade.pair)}${trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                      </td>
+                                      <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                        {trade.profit ? trade.profit : '0.00'}
+                                      </td>
+                                      <td className={`py-4 px-6 font-mono-data ${trade.returnPct.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                        {trade.returnPct}
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                          trade.status === 'TARGET HIT' 
+                                            ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
+                                            : trade.status === 'STOP LOSS'
+                                            ? 'bg-red-500/10 text-red-500 border border-red-500/30'
+                                            : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                                        }`}>
+                                          {trade.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+
+                          {/* Mobile View: Clean Card List Layout */}
+                          <div className="block md:hidden space-y-3 pb-4">
+                            {activeTradesList.map((trade) => (
+                              <div key={trade.id} className="bg-[#111827] p-4 rounded-xl border border-[#1E2D4A] space-y-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-slate-500 font-mono-data">{trade.date}</span>
                                   <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
                                     trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
                                   }`}>
-                                    {trade.type}
+                                    {trade.type} {trade.leverage || '10X'}
                                   </span>
-                                </td>
-                                <td className="py-4 px-6 font-mono-data text-cyan-400 font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</td>
-                                <td className="py-4 px-6 font-mono-data text-slate-400">{trade.leverage}</td>
-                                <td className="py-4 px-6 font-mono-data text-slate-300">
-                                  {trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
-                                </td>
-                                <td className="py-4 px-6 font-mono-data text-slate-300">
-                                  {trade.exitPrice ? `${getCurrencySymbol(trade.pair)}${trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
-                                </td>
-                                <td className={`py-4 px-6 font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                  {trade.profit ? trade.profit : '0.00'}
-                                </td>
-                                <td className={`py-4 px-6 font-mono-data ${trade.returnPct.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                  {trade.returnPct}
-                                </td>
-                                <td className="py-4 px-6">
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white font-bold text-xs">{trade.pair}</span>
+                                  {historySubTab === 'buy' ? (
+                                    <div className="flex flex-col items-end space-y-0.5">
+                                      <span className="text-xs font-mono-data text-slate-300">
+                                        Buy Price: {trade.entryPrice ? `${getCurrencySymbol(trade.pair)}${trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}
+                                      </span>
+                                      {trade.targetPrice && (
+                                        <span className="text-[10px] font-mono-data text-yellow-400 font-bold">
+                                          Target: {getCurrencySymbol(trade.pair)}{trade.targetPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                        </span>
+                                      )}
+                                      {trade.entryPrice && trade.targetPrice && (
+                                        <span className="text-[10px] font-mono-data text-[#00E676] font-bold">
+                                          Target Profit: {(() => {
+                                            const isShort = trade.type === 'SHORT'
+                                            const rawDiff = isShort 
+                                              ? (trade.entryPrice - trade.targetPrice) / trade.entryPrice 
+                                              : (trade.targetPrice - trade.entryPrice) / trade.entryPrice
+                                            const pnlPct = rawDiff * 10 * 100
+                                            const investNum = parseFloat(trade.investment.replace(/[^0-9.]/g, '')) || 0
+                                            const profitAmt = investNum * (pnlPct / 100)
+                                            return `+${getCurrencySymbol(trade.pair)}${profitAmt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (+${pnlPct.toFixed(1)}%)`
+                                          })()}
+                                        </span>
+                                      )}
+                                      {trade.highestPrice && (
+                                        <span className="text-[10px] font-mono-data text-emerald-400">
+                                          {trade.type === 'LONG' ? 'Highest' : 'Lowest'}: {getCurrencySymbol(trade.pair)}{trade.highestPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className={`text-xs font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
+                                      {trade.profit} ({trade.returnPct})
+                                    </span>
+                                  )}
+                                </div>
+                                {historySubTab === 'sell' && trade.entryPrice && trade.exitPrice && (
+                                  <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 flex-wrap gap-2">
+                                    <span>Buy Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                                    {trade.highestPrice && (
+                                      <span>Highest: <span className="font-mono-data text-emerald-400">{getCurrencySymbol(trade.pair)}{trade.highestPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                                    )}
+                                    <span>Sell Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center text-[10px] pt-2 border-t border-[#1E2D4A]/50">
+                                  <span className="text-slate-500">Capital: <span className="text-cyan-400 font-mono-data font-bold">{trade.investment}</span></span>
                                   <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                    trade.status === 'TARGET HIT' 
+                                    historySubTab === 'buy'
+                                      ? 'bg-[#00E676]/10 text-[#00E676] border border-[#00E676]/30'
+                                      : trade.status === 'TARGET HIT' 
                                       ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
                                       : trade.status === 'STOP LOSS'
                                       ? 'bg-red-500/10 text-red-500 border border-red-500/30'
@@ -4234,52 +5237,13 @@ export default function Dashboard() {
                                   }`}>
                                     {trade.status}
                                   </span>
-                                </td>
-                              </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Mobile View: Clean Card List Layout */}
-                    <div className="block md:hidden space-y-3 pb-4">
-                      {tradeHistory.map((trade) => (
-                          <div key={trade.id} className="bg-[#111827] p-4 rounded-xl border border-[#1E2D4A] space-y-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-500 font-mono-data">{trade.date}</span>
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                trade.type === 'LONG' ? 'bg-[#00E676]/10 text-[#00E676]' : 'bg-red-500/10 text-red-500'
-                              }`}>
-                                {trade.type} {trade.leverage || '10X'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-white font-bold text-xs">{trade.pair}</span>
-                              <span className={`text-xs font-mono-data font-bold ${trade.profit.startsWith('+') ? 'text-[#00E676]' : 'text-red-500'}`}>
-                                {trade.profit} ({trade.returnPct})
-                              </span>
-                            </div>
-                            {trade.entryPrice && trade.exitPrice && (
-                              <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                                <span>Buy Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
-                                <span>Sell Price: <span className="font-mono-data text-slate-300">{getCurrencySymbol(trade.pair)}{trade.exitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></span>
+                                </div>
                               </div>
-                            )}
-                            <div className="flex justify-between items-center text-[10px] pt-2 border-t border-[#1E2D4A]/50">
-                              <span className="text-slate-500">Capital: <span className="text-cyan-400 font-mono-data font-bold">{trade.investment ? trade.investment : `${getCurrencySymbol(trade.pair)}${tradeInvestment.toLocaleString()}`}</span></span>
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                trade.status === 'TARGET HIT' 
-                                  ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' 
-                                  : trade.status === 'STOP LOSS'
-                                  ? 'bg-red-500/10 text-red-500 border border-red-500/30'
-                                  : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-                              }`}>
-                                {trade.status}
-                              </span>
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                    </div>
+                        </>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -4373,6 +5337,600 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* TAB 5: AI BRAIN INTELLIGENCE */}
+          {currentTab === 'aibrain' && (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+              {/* Left Column - Navigation and Summary stats */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="premium-card rounded-xl p-5 border border-[#1E2D4A] bg-[#0A0F1D]/80 backdrop-blur-md">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">AI Sub-Terminal</h3>
+                  <div className="space-y-2">
+                    {[
+                      { id: 'advisor', name: 'Live AI Advisor', icon: 'support_agent' },
+                      { id: 'youtube', name: 'YouTube AI Learning', icon: 'smart_display' },
+                      { id: 'knowledge', name: 'Strategy Knowledge', icon: 'menu_book' },
+                      { id: 'log', name: 'Consultation Log', icon: 'receipt_long' },
+                      { id: 'config', name: 'AI API Parameters', icon: 'tune' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setAiActiveSection(tab.id)}
+                        className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl transition-all cursor-pointer text-left ${
+                          aiActiveSection === tab.id
+                            ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-[#162035]'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+                        <span className="text-xs font-semibold">{tab.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* AI Stats Card */}
+                <div className="premium-card rounded-xl p-5 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">AI Metrics</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">OpenRouter Status</span>
+                      <span className={`text-xs font-bold ${aiStatus.claude_connected ? 'text-green-400 animate-pulse' : 'text-purple-400'}`}>
+                        {aiStatus.claude_api_status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">YouTube Status</span>
+                      <span className={`text-xs font-bold ${aiStatus.youtube_connected ? 'text-green-400 animate-pulse' : 'text-purple-400'}`}>
+                        {aiStatus.youtube_api_status}
+                      </span>
+                    </div>
+                    <div className="border-t border-[#1E2D4A] my-2 pt-2"></div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">Today's Token Spend</span>
+                      <span className="text-xs font-bold text-cyan-400 font-mono-data">
+                        ${aiStatus.today_cost_usd?.toFixed(4)} / ${aiStatus.budget_limit_usd?.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">Learned Concepts</span>
+                      <span className="text-xs font-bold text-white font-mono-data">{aiStatus.strategies_count}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">Total Consultations</span>
+                      <span className="text-xs font-bold text-white font-mono-data">{aiStatus.consultations_count}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Main Active View */}
+              <div className="lg:col-span-3 space-y-6">
+                
+                {/* 1. LIVE AI ADVISOR */}
+                {aiActiveSection === 'advisor' && (
+                  <div className="premium-card rounded-xl p-6 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-purple-400">psychology</span>
+                          AI Advisor Consultant (OpenRouter)
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">Real-time trade auditing and technical market advisory feed for {selectedSymbol}.</p>
+                      </div>
+                      <button
+                        onClick={handleAiConsult}
+                        disabled={aiConsulting}
+                        className="px-4 py-2 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-black font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 flex items-center space-x-2"
+                      >
+                        <span className="material-symbols-outlined text-sm">rotate_right</span>
+                        <span>{aiConsulting ? 'Consulting...' : 'Request Advice Now'}</span>
+                      </button>
+                    </div>
+
+                    {aiConsulting && (
+                      <div className="py-16 flex flex-col items-center justify-center space-y-4">
+                        <div className="w-12 h-12 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin"></div>
+                        <p className="text-xs text-slate-400 animate-pulse">AI is parsing indicators, ticker history and global finance feeds...</p>
+                      </div>
+                    )}
+
+                    {!aiConsulting && aiConsultResult && (
+                      <div className="space-y-6">
+                        <div className="p-4 rounded-xl border flex items-start justify-between border-purple-500/30 bg-purple-950/10 text-purple-400">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping"></span>
+                              <p className="text-sm font-bold text-white">Advisory Recommendation: {aiConsultResult.recommendation}</p>
+                            </div>
+                            <div className="mt-4 text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                              {aiConsultResult.response}
+                            </div>
+                            {aiConsultResult.simulated && (
+                              <span className="inline-block text-[9px] font-mono-data text-slate-500 mt-4 uppercase tracking-wider">
+                                ℹ️ SIMULATED RESPONSE (No OpenRouter Key configured)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {aiConsultResult.news && aiConsultResult.news.length > 0 && (
+                          <div className="mt-6 border-t border-[#1E2D4A] pt-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
+                              <span className="material-symbols-outlined text-xs">newspaper</span>
+                              Global Market News Context
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {aiConsultResult.news.map((item, idx) => (
+                                <a
+                                  key={idx}
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-3 bg-[#131B2E]/60 border border-[#1E2D4A] rounded-xl hover:border-cyan-400/40 transition-colors flex flex-col justify-between"
+                                >
+                                  <div>
+                                    <h4 className="text-xs font-bold text-white line-clamp-2">{item.title}</h4>
+                                    <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{item.summary}</p>
+                                  </div>
+                                  <div className="flex justify-between items-center mt-3 text-[9px] text-slate-500">
+                                    <span>{item.source}</span>
+                                    <span>{item.published ? new Date(item.published).toLocaleDateString() : ''}</span>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!aiConsulting && !aiConsultResult && (
+                      <div className="py-12 text-center border-2 border-dashed border-[#1E2D4A] rounded-xl">
+                        <span className="material-symbols-outlined text-4xl text-slate-600 mb-2">insights</span>
+                        <p className="text-xs font-bold text-slate-400">No active consultation report loaded.</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Click the button above to request a real-time AI Advisor audit.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. YOUTUBE AI LEARNING */}
+                {aiActiveSection === 'youtube' && (
+                  <div className="premium-card rounded-xl p-6 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[#FF0000]">smart_display</span>
+                          YouTube AI Strategy Learner
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">Discover expert strategy videos. The AI Advisor will extract and structure exact indicators, triggers, and SL/TP rules.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-3 mb-6">
+                      <input
+                        type="text"
+                        value={ytSearchQuery}
+                        onChange={(e) => setYtSearchQuery(e.target.value)}
+                        placeholder="e.g. scalping strategy, vwap breakout, rsi trading"
+                        className="flex-1 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-purple-500 transition-colors"
+                      />
+                      <button
+                        onClick={searchYouTube}
+                        disabled={ytLoading}
+                        className="px-5 py-2 bg-[#1E2D4A] hover:bg-[#2C3F66] text-white font-bold text-xs uppercase rounded-xl transition-all cursor-pointer flex items-center space-x-2"
+                      >
+                        <span className="material-symbols-outlined text-sm">search</span>
+                        <span>{ytLoading ? 'Searching...' : 'Search'}</span>
+                      </button>
+                    </div>
+
+                    {ytLoading && (
+                      <div className="py-12 flex justify-center">
+                        <div className="w-10 h-10 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin"></div>
+                      </div>
+                    )}
+
+                    {!ytLoading && ytVideos.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {ytVideos.map((video) => (
+                          <div key={video.video_id} className="bg-[#131B2E]/60 border border-[#1E2D4A] rounded-xl overflow-hidden flex flex-col justify-between hover:border-purple-500/30 transition-colors">
+                            <div className="relative aspect-video bg-[#090D1A] flex items-center justify-center overflow-hidden">
+                              <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover opacity-80" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                              <span className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 rounded text-[9px] text-slate-400 font-bold">{video.view_count}</span>
+                              <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-red-600 rounded text-[9px] text-white font-bold">YouTube</span>
+                            </div>
+                            <div className="p-4 flex-1 flex flex-col justify-between">
+                              <div>
+                                <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug">{video.title}</h4>
+                                <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{video.description}</p>
+                                <div className="flex items-center space-x-2 mt-2 text-[9px] text-slate-500">
+                                  <span className="font-bold text-cyan-400">{video.channel}</span>
+                                  <span>•</span>
+                                  <span>{new Date(video.published_at).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => learnFromVideo(video)}
+                                disabled={ytLearningId === video.video_id}
+                                className="w-full mt-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 hover:text-white font-bold text-xs rounded-xl border border-purple-500/20 transition-all cursor-pointer flex items-center justify-center space-x-2"
+                              >
+                                <span className="material-symbols-outlined text-sm">{ytLearningId === video.video_id ? 'hourglass_top' : 'psychology'}</span>
+                                <span>{ytLearningId === video.video_id ? 'Extracting...' : 'AI Extract Strategy'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!ytLoading && ytVideos.length === 0 && (
+                      <div className="py-12 text-center border-2 border-dashed border-[#1E2D4A] rounded-xl">
+                        <span className="material-symbols-outlined text-4xl text-slate-600 mb-2">smart_display</span>
+                        <p className="text-xs font-bold text-slate-400">No strategy videos loaded.</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Enter a strategy keyword and search.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. STRATEGY KNOWLEDGE BASE */}
+                {aiActiveSection === 'knowledge' && (
+                  <div className="premium-card rounded-xl p-6 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-cyan-400">menu_book</span>
+                          Extracted Strategy Library
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">Structured trading systems learned from YouTube and stored inside the SQLite knowledge base.</p>
+                      </div>
+                    </div>
+
+                    {knowledgeBase.length > 0 ? (
+                      <div className="space-y-6">
+                        {knowledgeBase.map((strategy) => (
+                          <div key={strategy.id} className="p-5 border border-[#1E2D4A] rounded-xl bg-[#131B2E]/60 hover:border-cyan-400/30 transition-all">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[9px] uppercase font-bold rounded-lg">
+                                  {strategy.strategy_type}
+                                </span>
+                                <h3 className="text-sm font-bold text-white mt-2">{strategy.title}</h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">Source Channel: {strategy.channel} • Extracted at {new Date(strategy.date).toLocaleDateString()}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <span className="text-xs font-bold text-green-400 font-mono-data">AI Confidence: {strategy.confidence}%</span>
+                                <button
+                                  onClick={() => handleRunBacktest(strategy.id)}
+                                  className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 text-cyan-400 rounded-lg text-[10px] font-bold transition-all"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">analytics</span>
+                                  Run Backtest
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 border-t border-[#1E2D4A] pt-4">
+                              <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Derived Trading Rules:</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {(() => {
+                                  const rules = strategy.rules;
+                                  
+                                  // 1. If rules is a non-empty array
+                                  if (Array.isArray(rules) && rules.length > 0) {
+                                    return rules.map((rule, rIdx) => (
+                                      <div key={rIdx} className="p-3 bg-[#090D1A] rounded-lg border border-[#1E2D4A]/50">
+                                        <span className="text-[9px] text-cyan-400 font-bold uppercase">{rule.rule || 'Rule'}</span>
+                                        <p className="text-[11px] text-slate-300 mt-1 leading-normal">{rule.detail}</p>
+                                      </div>
+                                    ));
+                                  }
+                                  
+                                  // 2. If rules is an object and has keys
+                                  if (typeof rules === 'object' && rules !== null && Object.keys(rules).length > 0) {
+                                    // Check if all values in the object are empty arrays/strings (like the empty structure)
+                                    const isEmptyObj = Object.values(rules).every(v => 
+                                      v === null || v === '' || (Array.isArray(v) && v.length === 0) || (typeof v === 'object' && Object.keys(v).length === 0)
+                                    );
+                                    
+                                    if (!isEmptyObj) {
+                                      return Object.entries(rules).map(([key, val], rIdx) => {
+                                        let displayVal = '';
+                                        if (Array.isArray(val)) {
+                                          displayVal = val.length > 0 ? val.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(', ') : 'None extracted';
+                                        } else if (typeof val === 'object' && val !== null) {
+                                          displayVal = JSON.stringify(val);
+                                        } else {
+                                          displayVal = String(val);
+                                        }
+                                        return (
+                                          <div key={rIdx} className="p-3 bg-[#090D1A] rounded-lg border border-[#1E2D4A]/50">
+                                            <span className="text-[9px] text-cyan-400 font-bold uppercase">{key.replace(/_/g, ' ')}</span>
+                                            <p className="text-[11px] text-slate-300 mt-1 leading-normal">{displayVal}</p>
+                                          </div>
+                                        );
+                                      });
+                                    }
+                                  }
+                                  
+                                  // 3. Fallback for empty array/object or string
+                                  return (
+                                    <div className="col-span-full p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-start space-x-3 text-left">
+                                      <span className="material-symbols-outlined text-amber-500 text-lg mt-0.5">warning</span>
+                                      <div>
+                                        <h5 className="text-xs font-bold text-amber-400 uppercase tracking-wider">No Mechanical Rules Extracted</h5>
+                                        <p className="text-[10px] text-slate-400 mt-1 leading-normal">
+                                          This video overview did not contain enough detailed mechanical triggers (e.g. entry, exit, stop loss) or is a short clip. Try searching for a different comprehensive trading strategy video tutorial.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center border-2 border-dashed border-[#1E2D4A] rounded-xl">
+                        <span className="material-symbols-outlined text-4xl text-slate-600 mb-2">menu_book</span>
+                        <p className="text-xs font-bold text-slate-400">Library is empty.</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Go to the YouTube AI Learning tab to extract strategy logic.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. AI CONSULTATION LOG */}
+                {aiActiveSection === 'log' && (
+                  <div className="premium-card rounded-xl p-6 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-purple-400">receipt_long</span>
+                          AI Advisory Logs
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">History of all auto-consultations and manual audits conducted by AI Advisor.</p>
+                      </div>
+                    </div>
+
+                    {consultationsLog.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-[#131B2E] text-slate-400 font-bold uppercase text-[9px] border-b border-[#1E2D4A]">
+                            <tr>
+                              <th className="p-3">Timestamp</th>
+                              <th className="p-3">Symbol</th>
+                              <th className="p-3">Type</th>
+                              <th className="p-3">Recommendation</th>
+                              <th className="p-3">Advisory Snippet</th>
+                              <th className="p-3">Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#1E2D4A]">
+                            {consultationsLog.map((log) => (
+                              <tr key={log.id} className="hover:bg-[#131B2E]/40 transition-colors">
+                                <td className="p-3 font-mono-data text-[10px] text-slate-400">
+                                  {new Date(log.date).toLocaleString()}
+                                </td>
+                                <td className="p-3 font-bold text-white">{log.symbol}</td>
+                                <td className="p-3 uppercase">
+                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                    log.issue_type === 'anomaly' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                  }`}>
+                                    {log.issue_type}
+                                  </span>
+                                </td>
+                                <td className="p-3 font-bold">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    log.recommendation === 'BUY' ? 'text-green-400 bg-green-500/10' : (log.recommendation === 'SELL' ? 'text-red-400 bg-red-500/10' : 'text-amber-500 bg-amber-500/10')
+                                  }`}>
+                                    {log.recommendation}
+                                  </span>
+                                </td>
+                                <td className="p-3 truncate max-w-[200px] text-slate-400">{log.response}</td>
+                                <td className="p-3 font-mono-data text-[10px] text-cyan-400">
+                                  {log.cost > 0 ? `$${log.cost.toFixed(4)}` : '$0.00'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center border-2 border-dashed border-[#1E2D4A] rounded-xl">
+                        <span className="material-symbols-outlined text-4xl text-slate-600 mb-2">receipt_long</span>
+                        <p className="text-xs font-bold text-slate-400">Log is empty.</p>
+                        <p className="text-[10px] text-slate-500 mt-1">No AI consultation history matches this account yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. API KEYS CONFIG */}
+                {aiActiveSection === 'config' && (
+                  <div className="premium-card rounded-xl p-6 border border-[#1E2D4A] bg-[#0A0F1D]/80">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-cyan-400">tune</span>
+                          AI API Key Configurator
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">Provide your credentials to activate real-time OpenRouter and YouTube connections.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 max-w-xl">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">OpenRouter API Key</label>
+                        <input
+                          type="password"
+                          value={claudeApiKey}
+                          onChange={(e) => setClaudeApiKey(e.target.value)}
+                          placeholder={claudeApiKey ? '••••••••••••••••••••••••••••••••' : 'sk-or-ap-...'}
+                          className="w-full mt-1.5 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                          Stored securely on your server. Leave blank to run in mock simulation mode.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">OpenRouter Model</label>
+                        <select
+                          value={
+                            ['google/gemini-2.5-flash:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'openrouter/consensus'].includes(claudeModel)
+                              ? claudeModel
+                              : 'custom'
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val !== 'custom') {
+                              setClaudeModel(val);
+                            } else {
+                              setClaudeModel('');
+                            }
+                          }}
+                          className="w-full mt-1.5 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors"
+                        >
+                          <optgroup label="OpenRouter Free Models">
+                            <option value="google/gemini-2.5-flash:free">Gemini 2.5 Flash (google/gemini-2.5-flash:free)</option>
+                            <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (meta-llama/llama-3.1-8b-instruct:free)</option>
+                            <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (mistralai/mistral-7b-instruct:free)</option>
+                            <option value="openrouter/consensus">All Free Models Consensus (Gemini + Llama + Mistral)</option>
+                          </optgroup>
+                          <option value="custom">Custom Model ID...</option>
+                        </select>
+                        
+                        {!['google/gemini-2.5-flash:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'openrouter/consensus'].includes(claudeModel) && (
+                          <input
+                            type="text"
+                            value={claudeModel}
+                            onChange={(e) => setClaudeModel(e.target.value)}
+                            placeholder="Enter custom Model ID (e.g. google/gemini-2.5-flash:free)"
+                            className="w-full mt-2 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors font-mono-data"
+                          />
+                        )}
+                        <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                          Select the OpenRouter model for AI Brain predictions. Custom model IDs are supported.
+                        </p>
+                      </div>
+
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">YouTube Data API v3 Key</label>
+                        <input
+                          type="password"
+                          value={youtubeApiKey}
+                          onChange={(e) => setYoutubeApiKey(e.target.value)}
+                          placeholder={youtubeApiKey ? '••••••••••••••••••••••••••••••••' : 'AIzaSy...'}
+                          className="w-full mt-1.5 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                          Used to fetch video descriptions and metadata for strategy scanning.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">Consultation Trigger Frequency</label>
+                        <select
+                          value={aiConsultationMode}
+                          onChange={(e) => setAiConsultationMode(e.target.value)}
+                          className="w-full mt-1.5 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-cyan-400 outline-none"
+                        >
+                          <option value="anomaly">Anomaly Detected (On SL hit, high volatility) [Recommended]</option>
+                          <option value="every_trade">Predict & Trade Every Candle (High API cost / Active AI Mode)</option>
+                          <option value="manual">Manual Trigger Only (Advisory feed only)</option>
+                        </select>
+                      </div>
+
+                      {aiConsultationMode === 'every_trade' && (
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">AI Prediction Interval (Candle Time)</label>
+                          <select
+                            value={
+                              ['1s', '1m', '5m', '15m', '1h', '1d'].includes(aiCandleInterval)
+                                ? aiCandleInterval
+                                : 'custom'
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val !== 'custom') {
+                                setAiCandleInterval(val);
+                              } else {
+                                setAiCandleInterval('');
+                              }
+                            }}
+                            className="w-full mt-1.5 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors"
+                          >
+                            <option value="1s">1 Second (1S)</option>
+                            <option value="1m">1 Minute (1M)</option>
+                            <option value="5m">5 Minutes (5M)</option>
+                            <option value="15m">15 Minutes (15M)</option>
+                            <option value="1h">1 Hour (1H)</option>
+                            <option value="1d">1 Day (1D)</option>
+                            <option value="custom">Custom Interval...</option>
+                          </select>
+                          
+                          {!['1s', '1m', '5m', '15m', '1h', '1d'].includes(aiCandleInterval) && (
+                            <input
+                              type="text"
+                              value={aiCandleInterval}
+                              onChange={(e) => setAiCandleInterval(e.target.value)}
+                              placeholder="Enter custom interval (e.g. 10s, 30s, 2m)"
+                              className="w-full mt-2 bg-[#090D1A] border border-[#1E2D4A] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-400 transition-colors font-mono-data"
+                            />
+                          )}
+                          <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                            How often the AI Brain will predict the next candle. Clicking buttons on the live chart will automatically sync this setting!
+                          </p>
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">OpenRouter Daily Budget limit (USD)</label>
+                          <span className="text-xs font-bold text-cyan-400 font-mono-data">${aiDailyBudget}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="20"
+                          step="1"
+                          value={aiDailyBudget}
+                          onChange={(e) => setAiDailyBudget(parseFloat(e.target.value))}
+                          className="w-full mt-2 accent-cyan-400"
+                        />
+                        <p className="text-[9px] text-slate-500 leading-normal mt-1">
+                          Safety limit. If today's token cost exceeds this amount, auto-consultations will be skipped.
+                        </p>
+                      </div>
+
+                      <div className="pt-4 flex items-center space-x-3">
+                        <button
+                          onClick={saveAiSettings}
+                          className="px-6 py-2.5 bg-[#00E676] hover:bg-[#00c868] text-black font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-95"
+                        >
+                          Save AI Settings
+                        </button>
+                        {saveKeysStatus && (
+                          <span className={`text-xs font-bold ${saveKeysStatus.includes('Success') ? 'text-green-400' : 'text-slate-400 animate-pulse'}`}>
+                            {saveKeysStatus}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
 
         </div>
 
@@ -4523,8 +6081,9 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            
-            <div className="flex items-center space-x-4">
+
+          <div className="flex items-center space-x-4">
+
               <span className="text-xs font-bold text-slate-400">Auto-Trade</span>
               <label className="relative inline-flex items-center cursor-pointer group">
                 <input
@@ -4613,6 +6172,16 @@ export default function Dashboard() {
           >
             <span className="material-symbols-outlined text-lg">insights</span>
             <span className="text-[9px] font-bold">Signals</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('aibrain')}
+            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
+              currentTab === 'aibrain' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">psychology</span>
+            <span className="text-[9px] font-bold">AI Brain</span>
           </button>
         </nav>
 
@@ -4754,7 +6323,21 @@ export default function Dashboard() {
                   </label>
                 </div>
 
-
+                {/* Allowed Trade Direction dropdown select */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Allowed Trade Direction</span>
+                  </div>
+                  <select 
+                    value={tradeDirection}
+                    onChange={(e) => setTradeDirection(e.target.value)}
+                    className="w-full bg-[#162035] text-cyan-400 border border-[#1E2D4A] rounded-lg p-2 text-xs font-bold focus:outline-none"
+                  >
+                    <option value="BOTH">BOTH (LONG & SHORT Trades)</option>
+                    <option value="LONG_ONLY">LONG ONLY (Recommended for Nifty 50)</option>
+                    <option value="SHORT_ONLY">SHORT ONLY (Bearish Trades Only)</option>
+                  </select>
+                </div>
 
                 {/* Desktop Notifications */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
@@ -4806,35 +6389,35 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* Trade Size */}
+                {/* Trade Shares */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
-                    <span className="text-slate-300 font-bold">Trade Size (Per Position)</span>
-                    <span className="text-cyan-400 font-bold font-mono-data">{getPortfolioCurrencySymbol()}{tradeInvestment}</span>
+                    <span className="text-slate-300 font-bold">Auto-Trade Shares</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{tradeShares} {isCryptoActive ? 'Units' : 'Shares'}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-slate-500 font-bold">{getPortfolioCurrencySymbol()}</span>
                     <input 
                       type="number"
-                      min={getPortfolioCurrencySymbol() === '$' ? "5" : "10"}
+                      min={isCryptoActive ? "0.001" : "1"}
                       max="100000"
-                      value={tradeInvestment}
-                      onChange={(e) => setTradeInvestment(Math.max(getPortfolioCurrencySymbol() === '$' ? 5 : 10, parseInt(e.target.value) || 0))}
+                      step={isCryptoActive ? "0.001" : "1"}
+                      value={tradeShares}
+                      onChange={(e) => setTradeShares(Math.max(isCryptoActive ? 0.001 : 1, parseFloat(e.target.value) || 0))}
                       className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
                     />
                   </div>
                   <div className="grid grid-cols-6 gap-1.5 mt-3">
-                    {(getPortfolioCurrencySymbol() === '$' ? [5, 10, 25, 50, 100, 500] : [10, 25, 50, 100, 500, 1000]).map((amt) => (
+                    {(isCryptoActive ? [0.001, 0.01, 0.1, 0.5, 1.0, 5.0] : [1, 2, 5, 10, 50, 100]).map((amt) => (
                       <button
                         key={amt}
-                        onClick={() => setTradeInvestment(amt)}
+                        onClick={() => setTradeShares(amt)}
                         className={`py-1.5 text-[10px] font-mono-data font-bold rounded-lg border cursor-pointer transition-all ${
-                          tradeInvestment === amt 
+                          tradeShares === amt 
                             ? 'bg-cyan-500 text-black border-cyan-400' 
                             : 'bg-[#162035] text-slate-300 border-[#1E2D4A] hover:border-cyan-500/50'
                         }`}
                       >
-                        {getPortfolioCurrencySymbol()}{amt}
+                        {amt}
                       </button>
                     ))}
                   </div>
@@ -5023,6 +6606,18 @@ export default function Dashboard() {
                         className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
                       />
                     </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Allowed Trade Direction</label>
+                      <select 
+                        value={tradeDirection}
+                        onChange={(e) => setTradeDirection(e.target.value)}
+                        className="w-full bg-[#162035] text-slate-200 border border-[#1E2D4A] rounded-lg p-2 text-xs focus:outline-none focus:border-cyan-500 font-bold"
+                      >
+                        <option value="BOTH">BOTH (LONG & SHORT Trades)</option>
+                        <option value="LONG_ONLY">LONG ONLY (Recommended for Nifty 50)</option>
+                        <option value="SHORT_ONLY">SHORT ONLY (Bearish Trades Only)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -5056,7 +6651,9 @@ export default function Dashboard() {
                           enable_trailing_stop: enableTrailingStop,
                           auto_start_on_login: autoStartOnLogin,
                           trade_investment_usd: tradeInvestmentUSD,
-                          trade_investment_inr: tradeInvestmentINR
+                          trade_investment_inr: tradeInvestmentINR,
+                          trade_shares: tradeShares,
+                          trade_direction: tradeDirection
                         })
                       })
                       updateUser({
@@ -5074,6 +6671,130 @@ export default function Dashboard() {
                   className="w-full py-3 bg-cyan-400 text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-cyan-300 transition-all cursor-pointer text-center shadow-lg active:scale-95"
                 >
                   Save & Sync API Keys
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Strategy Backtesting Modal Overlay */}
+        {showBacktestModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#030712]/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-[#0b1329] border border-[#1E2D4A] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-scale-up">
+              <div className="flex justify-between items-center px-6 py-4 border-b border-[#1E2D4A] bg-[#111A30]">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-400">analytics</span>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Strategy Backtest Engine</h3>
+                </div>
+                <button 
+                  onClick={() => setShowBacktestModal(false)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+
+              <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6 text-left">
+                {isBacktesting ? (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20"></div>
+                      <div className="absolute inset-0 rounded-full border-4 border-t-cyan-400 animate-spin"></div>
+                    </div>
+                    <p className="text-xs font-bold text-cyan-400 animate-pulse uppercase tracking-wider">Simulating walk-forward trades on historical data...</p>
+                  </div>
+                ) : backtestResult ? (
+                  <div className="space-y-6">
+                    {/* Header Details */}
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{backtestResult.strategy_title}</h4>
+                      <p className="text-[10px] text-slate-400 mt-1">Backtested Symbol: <span className="text-slate-200 font-bold">{selectedSymbol}</span> • Interval: 15m</p>
+                    </div>
+
+                    {/* Stats Dashboard Grid */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-[#131E35] border border-[#1E2D4A]/50 rounded-xl p-3.5 text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Total Trades</span>
+                        <span className="text-lg font-black text-white font-mono-data">{backtestResult.total_trades}</span>
+                      </div>
+                      <div className="bg-[#131E35] border border-[#1E2D4A]/50 rounded-xl p-3.5 text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Win Rate</span>
+                        <span className={`text-lg font-black font-mono-data ${backtestResult.win_rate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {backtestResult.win_rate}%
+                        </span>
+                      </div>
+                      <div className="bg-[#131E35] border border-[#1E2D4A]/50 rounded-xl p-3.5 text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Net Returns</span>
+                        <span className={`text-lg font-black font-mono-data ${backtestResult.net_pnl_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {backtestResult.net_pnl_pct >= 0 ? '+' : ''}{backtestResult.net_pnl_pct}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Win rate visual slider */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                        <span>WIN RATE ACCURACY</span>
+                        <span className={backtestResult.win_rate >= 50 ? 'text-green-400' : 'text-red-400'}>{backtestResult.win_rate}%</span>
+                      </div>
+                      <div className="h-2 bg-[#162035] rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-1000 ${backtestResult.win_rate >= 50 ? 'bg-green-400' : 'bg-red-400'}`}
+                          style={{ width: `${backtestResult.win_rate}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Trade Ledger list */}
+                    <div className="space-y-2.5">
+                      <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Simulated Trade Ledger</h5>
+                      {backtestResult.trades && backtestResult.trades.length > 0 ? (
+                        <div className="border border-[#1E2D4A]/40 rounded-xl overflow-hidden bg-[#090D1A]">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-[#111A30]/50 border-b border-[#1E2D4A]/40 text-[9px] text-slate-400 font-bold uppercase">
+                                <th className="px-4 py-2">ID</th>
+                                <th className="px-4 py-2">Entry Price</th>
+                                <th className="px-4 py-2">Exit Price</th>
+                                <th className="px-4 py-2">Return (%)</th>
+                                <th className="px-4 py-2 text-right">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#1E2D4A]/20 text-[10px] text-slate-300 font-mono-data">
+                              {backtestResult.trades.map((t) => (
+                                <tr key={t.id} className="hover:bg-[#131B2E]/20 transition-colors">
+                                  <td className="px-4 py-2">#{t.id}</td>
+                                  <td className="px-4 py-2">${t.entry_price.toLocaleString()}</td>
+                                  <td className="px-4 py-2">${t.exit_price.toLocaleString()}</td>
+                                  <td className={`px-4 py-2 font-bold ${t.return_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {t.return_pct >= 0 ? '+' : ''}{t.return_pct}%
+                                  </td>
+                                  <td className="px-4 py-2 text-right">
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${t.status === 'WIN' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                      {t.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">No trades executed. Market indicators did not cross trigger thresholds in this time interval.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-red-400">Failed to load backtest reports.</p>
+                )}
+              </div>
+
+              <div className="px-6 py-4 bg-[#111A30] border-t border-[#1E2D4A] flex justify-end">
+                <button
+                  onClick={() => setShowBacktestModal(false)}
+                  className="px-4 py-2 bg-cyan-400 text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-cyan-300 transition-all cursor-pointer shadow-md"
+                >
+                  Close Engine
                 </button>
               </div>
             </div>

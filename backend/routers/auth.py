@@ -267,6 +267,8 @@ class SettingsUpdateRequest(BaseModel):
     auto_start_on_login: bool | None = None
     trade_investment_usd: float | None = None
     trade_investment_inr: float | None = None
+    trade_shares: float | None = None
+    trade_direction: str | None = None
 
 class SettingsResponse(BaseModel):
     broker_gateway: str | None = None
@@ -289,6 +291,8 @@ class SettingsResponse(BaseModel):
     auto_start_on_login: bool = False
     trade_investment_usd: float = 100.0
     trade_investment_inr: float = 10000.0
+    trade_shares: float = 1.0
+    trade_direction: str = "BOTH"
 
 @router.post("/settings")
 async def update_settings(
@@ -345,6 +349,10 @@ async def update_settings(
         user_settings.trade_investment_usd = request.trade_investment_usd
     if request.trade_investment_inr is not None:
         user_settings.trade_investment_inr = request.trade_investment_inr
+    if request.trade_shares is not None:
+        user_settings.trade_shares = request.trade_shares
+    if request.trade_direction is not None:
+        user_settings.trade_direction = request.trade_direction
         
     await db.commit()
     return {"status": "success", "message": "Settings updated successfully"}
@@ -383,6 +391,8 @@ async def get_settings(
         enable_trailing_stop=bool(user_settings.enable_trailing_stop),
         auto_start_on_login=bool(user_settings.auto_start_on_login),
         trade_investment_usd=user_settings.trade_investment_usd or 100.0,
-        trade_investment_inr=user_settings.trade_investment_inr or 10000.0
+        trade_investment_inr=user_settings.trade_investment_inr or 10000.0,
+        trade_shares=user_settings.trade_shares or 1.0,
+        trade_direction=user_settings.trade_direction or "BOTH"
     )
 

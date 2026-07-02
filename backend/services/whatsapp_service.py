@@ -118,16 +118,17 @@ class WhatsAppService:
 
     def notify_buy(self, to_number: str, symbol: str, entry_price: float, qty: float, target_price: float, stop_price: float, confidence: int, agree_count: int, mode: str, apikey: str | None = None) -> dict:
         label = "[DEMO]" if mode == "demo" else "[REAL]"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🟢 BUY EXECUTED {label}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"Pair    : {symbol}\n"
             f"Action  : BUY ✅\n"
-            f"Price   : ₹{entry_price:,.2f}\n"
+            f"Price   : {curr}{entry_price:,.2f}\n"
             f"Qty     : {qty:.4f}\n"
-            f"Amount  : ₹{(entry_price * qty):,.2f}\n"
-            f"Target  : ₹{target_price:,.2f} (1.5X)\n"
-            f"Stop    : ₹{stop_price:,.2f} (-2%)\n"
+            f"Amount  : {curr}{(entry_price * qty):,.2f}\n"
+            f"Target  : {curr}{target_price:,.2f} (1.5X)\n"
+            f"Stop    : {curr}{stop_price:,.2f} (-2%)\n"
             f"AI Conf : {confidence}% ({agree_count}/9 algos)\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"CryptoAI Trader"
@@ -138,14 +139,15 @@ class WhatsAppService:
 
     def notify_sell_target(self, to_number: str, symbol: str, entry_price: float, exit_price: float, qty: float, profit: float, return_pct: float, mode: str, apikey: str | None = None) -> dict:
         label = "[DEMO]" if mode == "demo" else "[REAL]"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🎯 PROFIT TARGET HIT {label}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"Pair    : {symbol}\n"
             f"Action  : SELL ✅ (1.5X Target)\n"
-            f"Exit    : ₹{exit_price:,.2f}\n"
-            f"Entry   : ₹{entry_price:,.2f}\n"
-            f"Profit  : +₹{profit:,.2f}\n"
+            f"Exit    : {curr}{exit_price:,.2f}\n"
+            f"Entry   : {curr}{entry_price:,.2f}\n"
+            f"Profit  : +{curr}{profit:,.2f}\n"
             f"Return  : +{return_pct:.1f}% 🚀\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"CryptoAI Trader"
@@ -156,14 +158,15 @@ class WhatsAppService:
 
     def notify_stop_loss(self, to_number: str, symbol: str, entry_price: float, exit_price: float, qty: float, loss: float, loss_pct: float, mode: str, apikey: str | None = None) -> dict:
         label = "[DEMO]" if mode == "demo" else "[REAL]"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🔴 STOP LOSS HIT {label}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"Pair    : {symbol}\n"
             f"Action  : SELL ⚠️ (Stop Loss)\n"
-            f"Exit    : ₹{exit_price:,.2f}\n"
-            f"Entry   : ₹{entry_price:,.2f}\n"
-            f"Loss    : -₹{abs(loss):,.2f}\n"
+            f"Exit    : {curr}{exit_price:,.2f}\n"
+            f"Entry   : {curr}{entry_price:,.2f}\n"
+            f"Loss    : -{curr}{abs(loss):,.2f}\n"
             f"Return  : {loss_pct:.1f}%\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"CryptoAI Trader"

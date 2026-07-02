@@ -3,7 +3,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, signals
+from routers import auth, signals, ai
 from database import engine, Base
 import models # Make sure models are registered on Base metadata
 
@@ -29,8 +29,18 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE user_settings ADD COLUMN enable_trailing_stop BOOLEAN DEFAULT 0",
                 "ALTER TABLE user_settings ADD COLUMN auto_start_on_login BOOLEAN DEFAULT 0",
                 "ALTER TABLE user_settings ADD COLUMN trade_investment_usd FLOAT DEFAULT 100.0",
-                "ALTER TABLE user_settings ADD COLUMN trade_investment_inr FLOAT DEFAULT 10000.0"
+                "ALTER TABLE user_settings ADD COLUMN trade_investment_inr FLOAT DEFAULT 10000.0",
+                "ALTER TABLE user_settings ADD COLUMN youtube_api_key VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN claude_api_key VARCHAR",
+                "ALTER TABLE user_settings ADD COLUMN claude_model VARCHAR DEFAULT 'claude-3-5-sonnet-20241022'",
+                "ALTER TABLE user_settings ADD COLUMN ai_consultation_mode VARCHAR DEFAULT 'anomaly'",
+                "ALTER TABLE user_settings ADD COLUMN ai_daily_budget FLOAT DEFAULT 5.0",
+                "ALTER TABLE trade_history ADD COLUMN strategy_id INTEGER",
+                "ALTER TABLE trade_history ADD COLUMN highest_price FLOAT",
+                "ALTER TABLE user_settings ADD COLUMN trade_shares FLOAT DEFAULT 1.0",
+                "ALTER TABLE trade_history ADD COLUMN quantity FLOAT DEFAULT 1.0"
             ]
+
             for sql in migrations:
                 try:
                     await conn.execute(text(sql))
@@ -48,10 +58,16 @@ async def lifespan(app: FastAPI):
     # Start unified background task to simulate live ticks for all active connections
     simulator_task = asyncio.create_task(signals.simulate_live_ticks())
     
+    # Start background autonomous learner loop
+    from services.autonomous_learner import start_autonomous_learner
+    learner_task = asyncio.create_task(start_autonomous_learner())
+    
     yield
     
     # Cancel background tasks on shutdown
     simulator_task.cancel()
+    learner_task.cancel()
+
 
 app = FastAPI(
     title="CryptoAI Trader API",
@@ -76,6 +92,7 @@ from fastapi.responses import FileResponse
 # Mount Routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1")
 
 @app.get("/health")
 def health_check():

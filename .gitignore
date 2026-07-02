@@ -37,3 +37,10 @@ backend/venv/
 active_trades.json
 bot_state.json
 models_state.json
+
+# Local env & agent temp files
+.env
+backend/.env
+scratch/
+opencode.json
+.agents/

@@ -49,16 +49,17 @@ class TelegramService:
 
     def notify_buy(self, bot_token: str, chat_id: str, symbol: str, entry_price: float, qty: float, target_price: float, stop_price: float, confidence: int, agree_count: int, mode: str) -> dict:
         label = "<b>[DEMO]</b>" if mode == "demo" else "<b>[REAL]</b>"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🟢 <b>BUY EXECUTED {label}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<b>Pair</b>    : {symbol}\n"
             f"<b>Action</b>  : BUY ✅\n"
-            f"<b>Price</b>   : ₹{entry_price:,.2f}\n"
+            f"<b>Price</b>   : {curr}{entry_price:,.2f}\n"
             f"<b>Qty</b>     : {qty:.4f}\n"
-            f"<b>Amount</b>  : ₹{(entry_price * qty):,.2f}\n"
-            f"<b>Target</b>  : ₹{target_price:,.2f} (1.5X)\n"
-            f"<b>Stop</b>    : ₹{stop_price:,.2f} (-2%)\n"
+            f"<b>Amount</b>  : {curr}{(entry_price * qty):,.2f}\n"
+            f"<b>Target</b>  : {curr}{target_price:,.2f} (1.5X)\n"
+            f"<b>Stop</b>    : {curr}{stop_price:,.2f} (-2%)\n"
             f"<b>AI Conf</b> : {confidence}% ({agree_count}/9 algos)\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<i>CryptoAI Trader</i>"
@@ -67,14 +68,15 @@ class TelegramService:
 
     def notify_sell_target(self, bot_token: str, chat_id: str, symbol: str, entry_price: float, exit_price: float, qty: float, profit: float, return_pct: float, mode: str) -> dict:
         label = "<b>[DEMO]</b>" if mode == "demo" else "<b>[REAL]</b>"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🎯 <b>PROFIT TARGET HIT {label}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<b>Pair</b>    : {symbol}\n"
             f"<b>Action</b>  : SELL ✅ (1.5X Target)\n"
-            f"<b>Exit</b>    : ₹{exit_price:,.2f}\n"
-            f"<b>Entry</b>   : ₹{entry_price:,.2f}\n"
-            f"<b>Profit</b>  : +₹{profit:,.2f}\n"
+            f"<b>Exit</b>    : {curr}{exit_price:,.2f}\n"
+            f"<b>Entry</b>   : {curr}{entry_price:,.2f}\n"
+            f"<b>Profit</b>  : +{curr}{profit:,.2f}\n"
             f"<b>Return</b>  : +{return_pct:.1f}% 🚀\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<i>CryptoAI Trader</i>"
@@ -83,14 +85,15 @@ class TelegramService:
 
     def notify_stop_loss(self, bot_token: str, chat_id: str, symbol: str, entry_price: float, exit_price: float, qty: float, loss: float, loss_pct: float, mode: str) -> dict:
         label = "<b>[DEMO]</b>" if mode == "demo" else "<b>[REAL]</b>"
+        curr = "$" if any(x in symbol.upper() for x in ["USDT", "BTC", "ETH", "SOL", "ADA", "USD"]) else "₹"
         msg = (
             f"🔴 <b>STOP LOSS HIT {label}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<b>Pair</b>    : {symbol}\n"
             f"<b>Action</b>  : SELL ⚠️ (Stop Loss)\n"
-            f"<b>Exit</b>    : ₹{exit_price:,.2f}\n"
-            f"<b>Entry</b>   : ₹{entry_price:,.2f}\n"
-            f"<b>Loss</b>    : -₹{abs(loss):,.2f}\n"
+            f"<b>Exit</b>    : {curr}{exit_price:,.2f}\n"
+            f"<b>Entry</b>   : {curr}{entry_price:,.2f}\n"
+            f"<b>Loss</b>    : -{curr}{abs(loss):,.2f}\n"
             f"<b>Return</b>  : {loss_pct:.1f}%\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"<i>CryptoAI Trader</i>"

@@ -26,4 +26,11 @@ class Settings:
     TWILIO_AUTH_TOKEN: str | None = os.getenv("TWILIO_AUTH_TOKEN")
     TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "whatsapp:+14155238886")
 
+    # AI Intelligence configurations
+    YOUTUBE_API_KEY: str | None = os.getenv("YOUTUBE_API_KEY")
+    CLAUDE_API_KEY: str | None = os.getenv("CLAUDE_API_KEY")
+    CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "google/gemini-2.5-flash:free")
+    CLAUDE_DAILY_BUDGET_USD: float = float(os.getenv("CLAUDE_DAILY_BUDGET_USD", "5.0"))
+    AI_CONSULTATION_MODE: str = os.getenv("AI_CONSULTATION_MODE", "anomaly") # anomaly, every_trade, manual
+
 settings = Settings()

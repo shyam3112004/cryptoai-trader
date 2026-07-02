@@ -44,6 +44,15 @@ class UserSetting(Base):
     trade_pacing = Column(String, default="rapid")
     trade_investment_usd = Column(Float, default=100.0)
     trade_investment_inr = Column(Float, default=10000.0)
+    trade_shares = Column(Float, default=1.0)
+    youtube_api_key = Column(String, nullable=True)
+    claude_api_key = Column(String, nullable=True)
+    claude_model = Column(String, default="claude-3-5-sonnet-20241022")
+    ai_consultation_mode = Column(String, default="anomaly") # anomaly, every_trade, manual
+    ai_daily_budget = Column(Float, default=5.0)
+    trade_direction = Column(String, default="BOTH") # BOTH, LONG_ONLY, SHORT_ONLY
+    ai_candle_interval = Column(String, default="30s") # e.g. "30s", "1m", "5m", "chart"
+
 
     # Relationship back to User
     user = relationship("User", back_populates="settings")
@@ -62,6 +71,46 @@ class TradeHistory(Base):
     status = Column(String, nullable=False) # TARGET HIT, STOP LOSS, MANUAL
     entry_price = Column(Float, nullable=True)
     exit_price = Column(Float, nullable=True)
+    highest_price = Column(Float, nullable=True)
+    strategy_id = Column(Integer, nullable=True)
+    quantity = Column(Float, default=1.0)
 
     # Relationship back to User
     user = relationship("User", back_populates="trades")
+
+class AIConsultation(Base):
+    __tablename__ = "ai_consultations"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    symbol = Column(String, nullable=False)
+    issue_type = Column(String, nullable=False) # anomaly, query, check
+    prompt_summary = Column(String, nullable=False)
+    response_summary = Column(String, nullable=False)
+    recommendation = Column(String, nullable=False) # BUY, SELL, HOLD, EXIT
+    tokens_used = Column(Integer, default=0)
+    estimated_cost = Column(Float, default=0.0)
+
+class AIKnowledge(Base):
+    __tablename__ = "ai_knowledge"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    video_id = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    channel = Column(String, nullable=True)
+    strategy_type = Column(String, nullable=False) # scalping, momentum, etc.
+    rules = Column(String, nullable=False) # JSON string of rules
+    confidence = Column(Float, default=70.0)
+
+class AILearningSession(Base):
+    __tablename__ = "ai_learning_sessions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    query = Column(String, nullable=False)
+    videos_scanned = Column(Integer, default=0)
+    strategies_extracted = Column(Integer, default=0)
