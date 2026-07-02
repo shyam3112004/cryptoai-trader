@@ -86,6 +86,10 @@ export default function Dashboard() {
     const saved = localStorage.getItem('leverage')
     return saved ? parseInt(saved) : 10
   })
+  const [useAlgorithms, setUseAlgorithms] = useState(() => {
+    const saved = localStorage.getItem('useAlgorithms')
+    return saved ? saved === 'true' : true
+  })
   const [tradeInvestmentUSD, setTradeInvestmentUSD] = useState(() => {
     const saved = localStorage.getItem('tradeInvestmentUSD')
     return saved ? parseFloat(saved) : 100.00
@@ -497,6 +501,10 @@ export default function Dashboard() {
   }, [leverage])
 
   useEffect(() => {
+    localStorage.setItem('useAlgorithms', useAlgorithms.toString())
+  }, [useAlgorithms])
+
+  useEffect(() => {
     if (!isSettingsLoadedRef.current) return
     const saveTradeSize = async () => {
       try {
@@ -513,7 +521,8 @@ export default function Dashboard() {
             trade_investment_usd: tradeInvestmentUSD,
             trade_investment_inr: tradeInvestmentINR,
             trade_shares: tradeShares,
-            leverage: leverage
+            leverage: leverage,
+            use_algorithms: useAlgorithms
           })
         })
       } catch (e) {
@@ -522,7 +531,7 @@ export default function Dashboard() {
     }
     const timeoutId = setTimeout(saveTradeSize, 1000)
     return () => clearTimeout(timeoutId)
-  }, [tradeInvestmentUSD, tradeInvestmentINR, tradeShares, leverage])
+  }, [tradeInvestmentUSD, tradeInvestmentINR, tradeShares, leverage, useAlgorithms])
 
   useEffect(() => {
     localStorage.setItem('autoTradeMode', autoTradeMode)
@@ -880,6 +889,10 @@ export default function Dashboard() {
         if (data.leverage) {
           setLeverage(data.leverage)
           localStorage.setItem('leverage', data.leverage.toString())
+        }
+        if (data.use_algorithms !== undefined) {
+          setUseAlgorithms(data.use_algorithms)
+          localStorage.setItem('useAlgorithms', data.use_algorithms.toString())
         }
         
         // Auto-mode settings
@@ -3507,6 +3520,27 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    {/* Algorithm (Technical Indicators) Toggle */}
+                    <div className="border-t border-[#1E2D4A]/50 pt-3 pb-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-slate-400">Technical Algorithms</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={useAlgorithms}
+                            onChange={(e) => setUseAlgorithms(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#162035] rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-cyan-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all shadow-inner"></div>
+                        </label>
+                      </div>
+                      <p className="text-[9px] text-slate-500 leading-normal">
+                        {useAlgorithms 
+                          ? "Hybrid Mode: Bot triggers on technical indicators (RSI, MACD) first, then gets AI confirmation." 
+                          : "Full AI Mode: Technical indicators are bypassed. The AI scans and makes entry decisions directly."}
+                      </p>
+                    </div>
+
                     {/* Auto-Trade Mode (Rotation vs Single Selected Asset) */}
                     <div className="border-t border-[#1E2D4A]/50 pt-3 pb-2">
                       <span className="text-slate-400 block mb-2">Auto-Trade Selection Scope</span>
@@ -3781,7 +3815,8 @@ export default function Dashboard() {
                               trade_investment_inr: tradeInvestmentINR,
                               trade_shares: tradeShares,
                               trade_direction: tradeDirection,
-                              leverage: leverage
+                              leverage: leverage,
+                              use_algorithms: useAlgorithms
                             })
                           })
                           updateUser({
@@ -6729,7 +6764,8 @@ export default function Dashboard() {
                           trade_investment_inr: tradeInvestmentINR,
                           trade_shares: tradeShares,
                           trade_direction: tradeDirection,
-                          leverage: leverage
+                          leverage: leverage,
+                          use_algorithms: useAlgorithms
                         })
                       })
                       updateUser({

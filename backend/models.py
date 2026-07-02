@@ -53,6 +53,7 @@ class UserSetting(Base):
     ai_daily_budget = Column(Float, default=5.0)
     trade_direction = Column(String, default="BOTH") # BOTH, LONG_ONLY, SHORT_ONLY
     ai_candle_interval = Column(String, default="30s") # e.g. "30s", "1m", "5m", "chart"
+    use_algorithms = Column(Boolean, default=True)
 
 
     # Relationship back to User

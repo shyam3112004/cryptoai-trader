@@ -2423,8 +2423,9 @@ async def simulate_live_ticks():
                                 await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                                 continue
 
-                    # 3. Check technical signal indicators — bypass if AI Consultation Mode is 'every_trade'
-                    is_every_candle = user_info.get("ai_consultation_mode") == "every_trade"
+                    # 3. Check technical signal indicators — bypass if AI Consultation Mode is 'every_trade' or if use_algorithms is False (Full AI mode)
+                    use_algorithms = user_info.get("use_algorithms", True)
+                    is_every_candle = (user_info.get("ai_consultation_mode") == "every_trade") or (not use_algorithms)
                     
                     if not is_every_candle and tech_signal not in ["BUY", "SELL"]:
                         continue
