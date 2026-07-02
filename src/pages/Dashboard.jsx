@@ -3956,7 +3956,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex justify-between text-[9px] font-mono-data text-slate-500 pt-1 border-t border-[#1E2D4A]/40">
-                    <span>LEVERAGE: 10X</span>
+                    <span>LEVERAGE: {leverage}X</span>
                     <span>STATUS: OPTIMIZED</span>
                   </div>
                 </div>
