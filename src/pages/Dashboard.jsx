@@ -635,7 +635,6 @@ export default function Dashboard() {
   const [marketPrices, setMarketPrices] = useState({})
 
   const totalBlockedMargin = Object.values(activePositions).reduce((acc, pos) => {
-    const leverage = 10;
     return acc + ((pos.qty * pos.entry_price) / leverage);
   }, 0);
   const displayedBalance = Math.max(0, balance - totalBlockedMargin);
