@@ -269,6 +269,7 @@ class SettingsUpdateRequest(BaseModel):
     trade_investment_inr: float | None = None
     trade_shares: float | None = None
     trade_direction: str | None = None
+    leverage: int | None = None
 
 class SettingsResponse(BaseModel):
     broker_gateway: str | None = None
@@ -293,6 +294,7 @@ class SettingsResponse(BaseModel):
     trade_investment_inr: float = 10000.0
     trade_shares: float = 1.0
     trade_direction: str = "BOTH"
+    leverage: int = 10
 
 @router.post("/settings")
 async def update_settings(
@@ -353,10 +355,13 @@ async def update_settings(
         user_settings.trade_shares = request.trade_shares
     if request.trade_direction is not None:
         user_settings.trade_direction = request.trade_direction
+    if request.leverage is not None:
+        user_settings.leverage = request.leverage
         
     await db.commit()
     return {"status": "success", "message": "Settings updated successfully"}
 
+@router.post("/settings/update") # alias or keep original route below
 @router.get("/settings", response_model=SettingsResponse)
 async def get_settings(
     current_user: User = Depends(get_current_user),
@@ -393,6 +398,7 @@ async def get_settings(
         trade_investment_usd=user_settings.trade_investment_usd or 100.0,
         trade_investment_inr=user_settings.trade_investment_inr or 10000.0,
         trade_shares=user_settings.trade_shares or 1.0,
-        trade_direction=user_settings.trade_direction or "BOTH"
+        trade_direction=user_settings.trade_direction or "BOTH",
+        leverage=user_settings.leverage or 10
     )
 

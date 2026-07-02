@@ -1381,6 +1381,7 @@ async def query_user_info() -> dict:
                 trade_investment_usd = setting.trade_investment_usd if setting else 100.0
                 trade_investment_inr = setting.trade_investment_inr if setting else 10000.0
                 trade_shares = setting.trade_shares if setting else 1.0
+                leverage = setting.leverage if setting else 10
                 trade_direction = setting.trade_direction if setting else "BOTH"
                 ai_candle_interval = setting.ai_candle_interval if setting else "30s"
                 ai_consultation_mode = setting.ai_consultation_mode if setting else "anomaly"
@@ -1406,6 +1407,7 @@ async def query_user_info() -> dict:
                     "trade_investment_usd": trade_investment_usd,
                     "trade_investment_inr": trade_investment_inr,
                     "trade_shares": trade_shares,
+                    "leverage": leverage,
                     "trade_direction": trade_direction,
                     "ai_candle_interval": ai_candle_interval,
                     "ai_consultation_mode": ai_consultation_mode
@@ -1430,7 +1432,8 @@ async def query_user_info() -> dict:
         "daily_loss_limit": 0.0,
         "enable_trailing_stop": False,
         "auto_start_on_login": False,
-        "trade_shares": 1.0
+        "trade_shares": 1.0,
+        "leverage": 10
     }
 
 async def execute_binance_real_order(symbol: str, side: str, quantity: float, api_key: str, api_secret: str):
@@ -2938,13 +2941,14 @@ async def simulate_live_ticks():
                     if target_hit or stop_hit or ai_exit_hit or candle_close_exit:
                         exit_price = close_price
                         
-                        # Calculate exact mathematical leveraged return percentage (10X leverage)
-                        pnl_pct = price_diff_pct * 10 * 100
+                        # Calculate exact mathematical leveraged return percentage (using user's customized leverage)
+                        user_leverage = float(user_info.get("leverage", 10.0))
+                        pnl_pct = price_diff_pct * user_leverage * 100
                         
                         # Unleveraged returns
                         is_crypto = "USDT" in symbol.upper() or "BTC" in symbol.upper() or "ETH" in symbol.upper() or "SOL" in symbol.upper() or "ADA" in symbol.upper()
-                        # Calculate actual leveraged P&L based on shares quantity and 10X leverage
-                        margin_blocked = (trade_qty * entry_price) / 10.0
+                        # Calculate actual leveraged P&L based on shares quantity and user's customized leverage
+                        margin_blocked = (trade_qty * entry_price) / user_leverage
                         profit_val = (pnl_pct / 100.0) * margin_blocked
                         
                         exit_side = "SELL" if direction == "LONG" else "BUY"
@@ -2971,7 +2975,7 @@ async def simulate_live_ticks():
                         asyncio.create_task(save_trade_history(
                             pair=symbol,
                             trade_type=direction,
-                            leverage="10X",
+                            leverage=f"{int(user_leverage)}X",
                             profit_val=profit_val,
                             return_pct_val=pnl_pct,
                             status=status_str,

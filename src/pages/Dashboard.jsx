@@ -82,6 +82,10 @@ export default function Dashboard() {
     const saved = localStorage.getItem('tradeShares')
     return saved ? parseFloat(saved) : 1.0
   })
+  const [leverage, setLeverage] = useState(() => {
+    const saved = localStorage.getItem('leverage')
+    return saved ? parseInt(saved) : 10
+  })
   const [tradeInvestmentUSD, setTradeInvestmentUSD] = useState(() => {
     const saved = localStorage.getItem('tradeInvestmentUSD')
     return saved ? parseFloat(saved) : 100.00
@@ -489,6 +493,10 @@ export default function Dashboard() {
 
   // Save trade size settings to backend when updated by user (debounced)
   useEffect(() => {
+    localStorage.setItem('leverage', leverage.toString())
+  }, [leverage])
+
+  useEffect(() => {
     if (!isSettingsLoadedRef.current) return
     const saveTradeSize = async () => {
       try {
@@ -504,7 +512,8 @@ export default function Dashboard() {
           body: JSON.stringify({
             trade_investment_usd: tradeInvestmentUSD,
             trade_investment_inr: tradeInvestmentINR,
-            trade_shares: tradeShares
+            trade_shares: tradeShares,
+            leverage: leverage
           })
         })
       } catch (e) {
@@ -513,7 +522,7 @@ export default function Dashboard() {
     }
     const timeoutId = setTimeout(saveTradeSize, 1000)
     return () => clearTimeout(timeoutId)
-  }, [tradeInvestmentUSD, tradeInvestmentINR, tradeShares])
+  }, [tradeInvestmentUSD, tradeInvestmentINR, tradeShares, leverage])
 
   useEffect(() => {
     localStorage.setItem('autoTradeMode', autoTradeMode)
@@ -868,6 +877,10 @@ export default function Dashboard() {
         }
         if (data.trade_investment_inr) {
           setTradeInvestmentINR(data.trade_investment_inr)
+        }
+        if (data.leverage) {
+          setLeverage(data.leverage)
+          localStorage.setItem('leverage', data.leverage.toString())
         }
         
         // Auto-mode settings
@@ -3463,6 +3476,38 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    <div className="border-t border-[#1E2D4A]/50 pt-3">
+                      <div className="flex justify-between mb-1.5">
+                        <span className="text-slate-400">Position Leverage</span>
+                        <span className="text-cyan-400 font-bold">
+                          {leverage}X
+                        </span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min={1} 
+                        max={100} 
+                        step={1}
+                        value={leverage}
+                        onChange={(e) => setLeverage(parseInt(e.target.value))}
+                        className="w-full accent-cyan-400 bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer mb-2.5"
+                      />
+                      <div className="grid grid-cols-6 gap-1">
+                        {[1, 5, 10, 25, 50, 100].map(amt => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setLeverage(amt)}
+                            className={`py-1 rounded text-[9px] font-mono-data border cursor-pointer transition-all text-center ${
+                              leverage === amt ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-[#162035] border-[#1E2D4A] text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {amt}X
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Auto-Trade Mode (Rotation vs Single Selected Asset) */}
                     <div className="border-t border-[#1E2D4A]/50 pt-3 pb-2">
                       <span className="text-slate-400 block mb-2">Auto-Trade Selection Scope</span>
@@ -3736,7 +3781,8 @@ export default function Dashboard() {
                               trade_investment_usd: tradeInvestmentUSD,
                               trade_investment_inr: tradeInvestmentINR,
                               trade_shares: tradeShares,
-                              trade_direction: tradeDirection
+                              trade_direction: tradeDirection,
+                              leverage: leverage
                             })
                           })
                           updateUser({
@@ -4090,7 +4136,6 @@ export default function Dashboard() {
                                 <td className="py-2.5 text-slate-300">
                                   {(() => {
                                     const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
-                                    const leverage = 10;
                                     const marginBlocked = (pos.qty * pos.entry_price) / leverage;
                                     const totalValue = pos.qty * pos.entry_price;
                                     return (
@@ -4135,7 +4180,6 @@ export default function Dashboard() {
                   const pairKey = pair.replace('/', '').replace(' ', '').toUpperCase()
                   const priceVal = marketPrices[pairKey]
                   const isCrypto = pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('ADA')
-                  const leverage = 10
                   const marginVal = priceVal ? (priceVal / leverage) : null
                   return (
                     <div key={pair} className="relative flex items-center">
@@ -4456,7 +4500,6 @@ export default function Dashboard() {
                   const pairKey = pair.replace('/', '').replace(' ', '').toUpperCase()
                   const priceVal = marketPrices[pairKey]
                   const isCrypto = pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('ADA')
-                  const leverage = 10
                   const marginVal = priceVal ? (priceVal / leverage) : null
                   return (
                     <div key={pair} className="relative flex items-center">
@@ -4900,7 +4943,6 @@ export default function Dashboard() {
                                   <td className="py-2.5 text-slate-300">
                                     {(() => {
                                       const isCrypto = sym.includes('BTC') || sym.includes('ETH') || sym.includes('SOL') || sym.includes('ADA');
-                                      const leverage = 10;
                                       const marginBlocked = (pos.qty * pos.entry_price) / leverage;
                                       const totalValue = pos.qty * pos.entry_price;
                                       return (
@@ -6423,6 +6465,40 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Trade Leverage */}
+                <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-300 font-bold">Auto-Trade Leverage</span>
+                    <span className="text-cyan-400 font-bold font-mono-data">{leverage}X</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={leverage}
+                      onChange={(e) => setLeverage(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))}
+                      className="w-full bg-[#162035] text-white border border-[#1E2D4A] rounded-lg p-2 text-xs font-mono-data focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5 mt-3">
+                    {[1, 5, 10, 25, 50, 100].map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => setLeverage(amt)}
+                        className={`py-1.5 text-[10px] font-mono-data font-bold rounded-lg border cursor-pointer transition-all ${
+                          leverage === amt 
+                            ? 'bg-[#06B6D4] text-black border-[#06B6D4]' 
+                            : 'bg-[#162035] text-slate-300 border-[#1E2D4A] hover:border-[#06B6D4]/50'
+                        }`}
+                      >
+                        {amt}X
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Selection Scope */}
                 <div className="bg-[#111827] p-3.5 rounded-xl border border-[#1E2D4A]">
                   <div className="flex justify-between mb-2">
@@ -6653,7 +6729,8 @@ export default function Dashboard() {
                           trade_investment_usd: tradeInvestmentUSD,
                           trade_investment_inr: tradeInvestmentINR,
                           trade_shares: tradeShares,
-                          trade_direction: tradeDirection
+                          trade_direction: tradeDirection,
+                          leverage: leverage
                         })
                       })
                       updateUser({

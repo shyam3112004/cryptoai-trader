@@ -45,6 +45,7 @@ class UserSetting(Base):
     trade_investment_usd = Column(Float, default=100.0)
     trade_investment_inr = Column(Float, default=10000.0)
     trade_shares = Column(Float, default=1.0)
+    leverage = Column(Integer, default=10)
     youtube_api_key = Column(String, nullable=True)
     claude_api_key = Column(String, nullable=True)
     claude_model = Column(String, default="claude-3-5-sonnet-20241022")
