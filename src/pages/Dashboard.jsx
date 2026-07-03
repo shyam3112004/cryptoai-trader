@@ -3044,17 +3044,7 @@ export default function Dashboard() {
             <span className="text-sm font-semibold">Chart Analysis</span>
           </button>
           
-          <button
-            onClick={() => setCurrentTab('algorithms')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all cursor-pointer ${
-              currentTab === 'algorithms' 
-                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
-                : 'text-slate-400 hover:text-white hover:bg-[#162035]'
-            }`}
-          >
-            <span className="material-symbols-outlined text-xl">memory</span>
-            <span className="text-sm font-semibold">Algorithms</span>
-          </button>
+          {/* Algorithms tab removed to support 100% pure Full AI Mode navigation */}
           
           <button
             onClick={() => setCurrentTab('history')}
@@ -6231,15 +6221,7 @@ export default function Dashboard() {
             <span className="text-[9px] font-bold">Chart</span>
           </button>
 
-          <button
-            onClick={() => setCurrentTab('algorithms')}
-            className={`flex flex-col items-center space-y-0.5 py-1 px-2 rounded-lg transition-all cursor-pointer ${
-              currentTab === 'algorithms' ? 'text-cyan-400 bg-cyan-500/10' : 'text-slate-400'
-            }`}
-          >
-            <span className="material-symbols-outlined text-lg">memory</span>
-            <span className="text-[9px] font-bold">Algos</span>
-          </button>
+          {/* Algorithms tab removed to support 100% pure Full AI Mode navigation */}
 
           <button
             onClick={() => setCurrentTab('history')}
