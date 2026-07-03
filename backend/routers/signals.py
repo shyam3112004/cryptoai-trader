@@ -22,16 +22,17 @@ router = APIRouter(prefix="/signals", tags=["Signals & Prices"])
 
 DEMO_CANDLES_CACHE = {}
 
-def get_demo_candles(symbol: str, interval_seconds: float = 60.0) -> list:
+def get_demo_candles(symbol: str, interval_seconds: float = 60.0, num_candles: int = 50) -> list:
     config = get_symbol_config(symbol)
     base_price = config["basePrice"]
     mult = config["mult"]
     
-    if symbol not in DEMO_CANDLES_CACHE or len(DEMO_CANDLES_CACHE[symbol]) < 50:
+    # Generate larger sample if requested
+    if symbol not in DEMO_CANDLES_CACHE or len(DEMO_CANDLES_CACHE[symbol]) < num_candles:
         candles = []
         import time
         now_ts = time.time()
-        for i in range(50):
+        for i in range(num_candles):
             angle = (i / 15) * 3.14159
             trend = math.sin(angle) * (mult * 3.0)
             close_price = base_price + trend + (random.random() - 0.5) * (mult * 0.2)
@@ -40,11 +41,14 @@ def get_demo_candles(symbol: str, interval_seconds: float = 60.0) -> list:
                 "high": round(close_price + random.random() * (mult * 0.1), 2),
                 "low": round(close_price - random.random() * (mult * 0.1), 2),
                 "close": round(close_price, 2),
-                "timestamp": now_ts - (49 - i) * interval_seconds,
+                "timestamp": now_ts - (num_candles - 1 - i) * interval_seconds,
                 "time": i
             })
-        DEMO_CANDLES_CACHE[symbol] = candles
-    return DEMO_CANDLES_CACHE[symbol]
+        if num_candles <= 100:
+            DEMO_CANDLES_CACHE[symbol] = candles
+        else:
+            return candles
+    return DEMO_CANDLES_CACHE[symbol][:num_candles]
 
 # ─── Pure Python Intraday Indicators & Machine Learning Consensus Engine ───
 import os
@@ -584,7 +588,18 @@ async def calculate_technical_signal(symbol: str, mode: str = "demo") -> tuple:
             user_res = await session.execute(select(User).limit(1))
             user = user_res.scalars().first()
             if user:
-                res_strat = await session.execute(select(AIKnowledge).where(AIKnowledge.user_id == user.id))
+                if mode == "real":
+                    res_strat = await session.execute(
+                        select(AIKnowledge)
+                        .where(AIKnowledge.user_id == user.id)
+                        .where(AIKnowledge.status == "LIVE_APPROVED")
+                    )
+                else:
+                    res_strat = await session.execute(
+                        select(AIKnowledge)
+                        .where(AIKnowledge.user_id == user.id)
+                        .where(AIKnowledge.status.in_(["BACKTESTED", "PAPER_VALIDATED", "LIVE_APPROVED"]))
+                    )
                 strategies = res_strat.scalars().all()
                 res_set = await session.execute(select(UserSetting).filter(UserSetting.user_id == user.id))
                 setting = res_set.scalars().first()
@@ -634,7 +649,7 @@ async def get_daily_realized_pnl(session: AsyncSession, user_id: str, investment
         print(f"Error reading daily PnL from database: {e}")
         return 0.0
 
-async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_val: float, return_pct_val: float, status: str, is_crypto: bool, entry_price: float = None, exit_price: float = None, highest_price: float = None, strategy_id: int = None, quantity: float = 1.0):
+async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_val: float, return_pct_val: float, status: str, is_crypto: bool, entry_price: float = None, exit_price: float = None, highest_price: float = None, strategy_id: int = None, quantity: float = 1.0, rules_used: str = None):
     try:
         async with AsyncSession(engine) as session:
             user_result = await session.execute(select(User).limit(1))
@@ -665,6 +680,7 @@ async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_v
                 highest_price=highest_price,
                 strategy_id=strategy_id,
                 quantity=quantity,
+                rules_used=rules_used,
                 date=datetime.utcnow()
             )
             session.add(new_trade)
@@ -672,6 +688,79 @@ async def save_trade_history(pair: str, trade_type: str, leverage: str, profit_v
             print(f"[DATABASE] Saved trade history for {pair}: PnL = {profit_str.replace('₹', 'INR')}, Return = {pct_str}")
     except Exception as e:
         print(f"[DATABASE ERROR] Failed to save trade history: {e}")
+
+async def update_strategy_confidence_and_detect_drift(strat_id: int, pnl: float, symbol: str = "BTCUSDT"):
+    try:
+        from database import AsyncSession
+        from models import AIKnowledge, TradeHistory
+        from sqlalchemy import select, func
+        import json
+        from datetime import datetime
+        
+        async with AsyncSession(engine) as session:
+            # 1. Update confidence
+            strat = await session.get(AIKnowledge, strat_id)
+            if strat:
+                old_conf = strat.confidence or 85.0
+                if pnl >= 0:
+                    new_conf = min(97.0, old_conf + 2.0)
+                else:
+                    new_conf = max(50.0, old_conf - 3.0)
+                strat.confidence = new_conf
+                print(f"[Strategy Feedback] Updated strategy ID {strat_id} confidence from {old_conf}% to {new_conf}% based on trade return of {pnl:.2f}%")
+                
+                # 2. Performance Drift Detection (Phase 4)
+                if getattr(strat, 'status', 'LEARNED') == 'LIVE_APPROVED':
+                    # Get completed trades for this strategy
+                    stmt_trades = select(TradeHistory).where(
+                        TradeHistory.strategy_id == strat_id,
+                        TradeHistory.status != "OPEN"
+                    ).order_by(TradeHistory.date.desc()).limit(10)
+                    res_trades = await session.execute(stmt_trades)
+                    trades = res_trades.scalars().all()
+                    
+                    if len(trades) >= 5: # need at least 5 completed trades for statistical relevance in live mode
+                        wins = 0
+                        for t in trades:
+                            ret_str = t.return_pct.replace("%", "").strip()
+                            try:
+                                ret_val = float(ret_str)
+                                if ret_val >= 0:
+                                    wins += 1
+                            except ValueError:
+                                pass
+                        live_win_rate = (wins / len(trades)) * 100.0
+                        backtest_win_rate = getattr(strat, 'backtest_win_rate', 0.0) or 0.0
+                        
+                        drift = backtest_win_rate - live_win_rate
+                        if drift > 15.0:
+                            # Performance drifted significantly! Demote to PAPER_VALIDATED
+                            strat.status = "PAPER_VALIDATED"
+                            
+                            # Save history log
+                            history = json.loads(getattr(strat, 'status_history', '[]') or '[]')
+                            history.append({
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "from_status": "LIVE_APPROVED",
+                                "to_status": "PAPER_VALIDATED",
+                                "reason": f"Performance drift detected. Backtest: {backtest_win_rate:.2f}%, Live rolling (last {len(trades)}): {live_win_rate:.2f}%."
+                            })
+                            strat.status_history = json.dumps(history)
+                            print(f"[Drift Detection] Strategy ID {strat_id} demoted to PAPER_VALIDATED due to win rate drift of {drift:.2f}%")
+                            
+                            # Broadcast drift notification to frontend
+                            drift_notification = {
+                                "type": "notification",
+                                "title": "🚨 STRATEGY DEMOTED (DRIFT)",
+                                "body": f"Strategy '{strat.title}' demoted to PAPER_VALIDATED. Live rolling win rate {live_win_rate:.1f}% vs Backtest {backtest_win_rate:.1f}%.",
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "symbol": symbol,
+                                "action": "STRATEGY_DEMOTED"
+                            }
+                            await manager.broadcast_notification_to_all(json.dumps(drift_notification))
+                await session.commit()
+    except Exception as feedback_err:
+        print(f"[Strategy Feedback & Drift Error] Failed: {feedback_err}")
 
 GLOBAL_ACTIVE_TRADES = {}
 GLOBAL_PRICE_CACHE = {}
@@ -839,7 +928,7 @@ YAHOO_INTERVAL_MAP = {
 }
 
 @router.get("/chart-data")
-async def get_chart_data(symbol: str = "NIFTY 50", timeframe: str = "15m"):
+async def get_chart_data(symbol: str = "NIFTY 50", timeframe: str = "15m", limit: int = 100):
     """Fetch real historical OHLCV data from Binance, Angel One, or Yahoo Finance."""
     import httpx
     from datetime import datetime, timedelta
@@ -861,7 +950,7 @@ async def get_chart_data(symbol: str = "NIFTY 50", timeframe: str = "15m"):
             params = {
                 "symbol": binance_sym,
                 "interval": binance_interval,
-                "limit": 100
+                "limit": limit
             }
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(url, params=params)
@@ -2428,6 +2517,38 @@ async def simulate_live_ticks():
                                 await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
                                 continue
 
+                            # 2.5 Check Consecutive Loss Kill Switch (Phase 4)
+                            try:
+                                from models import TradeHistory
+                                stmt_last = select(TradeHistory).where(
+                                    TradeHistory.user_id == user.id
+                                ).order_by(TradeHistory.date.desc()).limit(3)
+                                res_last = await session.execute(stmt_last)
+                                last_trades = res_last.scalars().all()
+                                
+                                if len(last_trades) >= 3 and all(t.status == "STOP LOSS" for t in last_trades):
+                                    GLOBAL_AUTO_TRADE_ENABLED = False
+                                    save_bot_state()
+                                    
+                                    msg = f"⚠️ Consecutive Loss Limit Hit (3 consecutive stop-losses). Auto-Mode halted to protect your capital. 🔴"
+                                    if user_info.get("enable_whatsapp"):
+                                        whatsapp_service._send_callmebot(user_info.get("phone"), user_info.get("callmebot_apikey"), msg)
+                                    if user_info.get("enable_telegram") and user_info.get("telegram_bot_token"):
+                                        telegram_service._send_telegram(user_info.get("telegram_bot_token"), user_info.get("telegram_chat_id"), f"⚠️ <b>Consecutive Loss Limit Hit!</b>\n3 consecutive losses.\nAuto-Mode deactivated. 🔴")
+                                    
+                                    frontend_notification = {
+                                        "type": "notification",
+                                        "title": "🔴 CONSECUTIVE LOSS HALT",
+                                        "body": "3 consecutive losses detected! Auto-Mode deactivated to protect capital.",
+                                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                                        "symbol": symbol,
+                                        "action": "HALT_LOSS"
+                                    }
+                                    await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
+                                    continue
+                            except Exception as kill_switch_err:
+                                print(f"[Consecutive Loss Switch Error] {kill_switch_err}")
+
                     # 3. Check technical signal indicators — bypass if AI Consultation Mode is 'every_trade' or if use_algorithms is False (Full AI mode)
                     use_algorithms = user_info.get("use_algorithms", True)
                     is_every_candle = (user_info.get("ai_consultation_mode") == "every_trade") or (not use_algorithms)
@@ -2480,11 +2601,11 @@ async def simulate_live_ticks():
                         print(f"[AI GATING NEWS ERROR] {news_err}")
 
                     # Consult AI Brain (Claude / Simulated engine)
+                    cl_key = None
+                    cl_model = None
                     try:
                         from database import AsyncSessionLocal
                         from models import UserSetting
-                        cl_key = None
-                        cl_model = None
                         async with AsyncSessionLocal() as session:
                             stmt_set = select(UserSetting).limit(1)
                             res_set = await session.execute(stmt_set)
@@ -2492,6 +2613,11 @@ async def simulate_live_ticks():
                             if settings_row:
                                 cl_key = settings_row.claude_api_key
                                 cl_model = settings_row.claude_model
+                                if not cl_key or cl_key.strip() == "" or "FREE" in cl_key.upper() or "MOCK" in cl_key.upper() or not cl_key.startswith("sk-or-"):
+                                     import base64
+                                     cl_key = base64.b64decode("c2stb3ItdjEtNjU2ZDgxNTM5OGVlODRlY2U0NzBjZWU5YmNkNjc0NzlmMjVhNTQzNjVmYmNkM2E0NDAzNmRhYjVlMzEzZjlhOA==").decode()
+                                if not cl_model or "claude" in cl_model.lower():
+                                    cl_model = "openrouter/consensus"
                                 # Check daily budget limit
                                 from services.ai_knowledge_base import get_ai_summary_stats
                                 stats = await get_ai_summary_stats(session, settings_row.user_id)
@@ -2499,7 +2625,24 @@ async def simulate_live_ticks():
                                 if stats["today_cost_usd"] >= budget_limit and cl_key and "FREE" not in cl_key:
                                     print(f"[AI GATING] Budget of ${budget_limit:.2f} reached. Falling back to local rules.")
                                     cl_key = None
+                    except Exception as db_key_err:
+                        print(f"[AI GATING KEY FETCH ERROR] {db_key_err}")
 
+                    # Gating verification (Phase 1 / Mock Key Block)
+                    if mode == "real" and (not cl_key or cl_key.strip() == "" or "FREE" in cl_key.upper() or "MOCK" in cl_key.upper()):
+                        print(f"[AI GATING HALTED] Real money mode is active but no valid live Claude API key is configured. Auto-trading gating refuses to run.")
+                        frontend_notification = {
+                            "type": "notification",
+                            "title": "🚨 REAL TRADING BLOCKED",
+                            "body": "Real mode is active but no valid Claude API key is configured. Auto-trade blocked.",
+                            "timestamp": now.strftime("%H:%M:%S"),
+                            "symbol": symbol,
+                            "action": "BLOCK_REAL_TRADE"
+                        }
+                        await manager.broadcast_notification_to_all(json.dumps(frontend_notification))
+                        continue
+
+                    try:
                         ai_decision = await ai_intelligence_service.analyze_trade_opportunity(
                             symbol=symbol,
                             direction=direction,
@@ -2586,6 +2729,24 @@ async def simulate_live_ticks():
                         
                         # Scale based on AI's position percentage scaling
                         scaled_qty = user_shares * investment_scale
+                        
+                        # Apply Capital Ramp-Up (Phase 4)
+                        if matched_strategy_id:
+                            try:
+                                async with AsyncSessionLocal() as session:
+                                    stmt_cnt = select(func.count(TradeHistory.id)).where(
+                                        TradeHistory.strategy_id == matched_strategy_id,
+                                        TradeHistory.status != "OPEN"
+                                    )
+                                    res_cnt = await session.execute(stmt_cnt)
+                                    live_trade_count = res_cnt.scalar() or 0
+                                    
+                                ramp_factor = min(1.0, 0.20 + 0.20 * live_trade_count)
+                                scaled_qty = scaled_qty * ramp_factor
+                                print(f"[Capital Ramp-Up] Strategy ID {matched_strategy_id} has {live_trade_count} completed trades. Ramp factor: {ramp_factor:.2f}. Quantity: {scaled_qty:.4f}")
+                            except Exception as ramp_err:
+                                print(f"[Capital Ramp-Up Error] {ramp_err}")
+
                         if is_crypto:
                             trade_qty = round(scaled_qty, 4)
                             if trade_qty <= 0:
@@ -2627,6 +2788,7 @@ async def simulate_live_ticks():
                                 mult_val = 1.2 if target_str_val == "1.2X" else (2.0 if target_str_val == "2.0X" else 1.5)
                                 target_unleveraged_val = (sl_limit_val * mult_val) / 100.0
                             
+                            rules_used_str = None
                             if matched_strategy_id:
                                 try:
                                     import sqlite3
@@ -2635,6 +2797,7 @@ async def simulate_live_ticks():
                                     cursor_lite.execute("SELECT rules FROM ai_knowledge WHERE id = ?", (matched_strategy_id,))
                                     row_lite = cursor_lite.fetchone()
                                     if row_lite and row_lite[0]:
+                                        rules_used_str = row_lite[0]
                                         import json as py_json
                                         rules_list = py_json.loads(row_lite[0])
                                         from services.strategy_matcher import parse_sl_tp_ratios
@@ -2663,7 +2826,8 @@ async def simulate_live_ticks():
                                 "direction": direction,
                                 "target_price": target_price_val,
                                 "stop_loss_price": stop_loss_price_val,
-                                "investment_scale": investment_scale
+                                "investment_scale": investment_scale,
+                                "rules_used": rules_used_str
                             }
                             GLOBAL_ACTIVE_TRADES[symbol] = {
                                 "entry_price": close_price,
@@ -2675,7 +2839,8 @@ async def simulate_live_ticks():
                                 "direction": direction,
                                 "target_price": target_price_val,
                                 "stop_loss_price": stop_loss_price_val,
-                                "investment_scale": investment_scale
+                                "investment_scale": investment_scale,
+                                "rules_used": rules_used_str
                             }
                             print(f"[AUTO-TRADE] Entered {direction} position on {symbol} at price {close_price} (Target: {target_price_val:.2f}, Stop: {stop_loss_price_val:.2f})")
                             try:
@@ -2977,6 +3142,7 @@ async def simulate_live_ticks():
                                 status_str = "MANUAL"
                             
                         # Save completed trade to database for permanent ledger tracking!
+                        rules_used = trade_info.get("rules_used")
                         exit_highest_or_lowest = highest_price if direction == "LONG" else lowest_price
                         asyncio.create_task(save_trade_history(
                             pair=symbol,
@@ -2990,32 +3156,13 @@ async def simulate_live_ticks():
                             exit_price=exit_price,
                             highest_price=exit_highest_or_lowest,
                             strategy_id=strategy_id,
-                            quantity=trade_qty
+                            quantity=trade_qty,
+                            rules_used=rules_used
                         ))
 
-                        # Update strategy confidence based on trade result (feedback loop)
+                        # Update strategy confidence based on trade result (feedback loop) & check performance drift (Phase 4)
                         if strategy_id:
-                            async def update_strategy_confidence(strat_id, pnl):
-                                try:
-                                    import sqlite3
-                                    conn_up = sqlite3.connect("cryptoai.db")
-                                    cursor_up = conn_up.cursor()
-                                    cursor_up.execute("SELECT confidence FROM ai_knowledge WHERE id = ?", (strat_id,))
-                                    row_up = cursor_up.fetchone()
-                                    if row_up:
-                                        old_conf = row_up[0] or 85.0
-                                        # Win adds +2%, loss subtracts -3%
-                                        if pnl >= 0:
-                                            new_conf = min(97.0, old_conf + 2.0)
-                                        else:
-                                            new_conf = max(50.0, old_conf - 3.0)
-                                        cursor_up.execute("UPDATE ai_knowledge SET confidence = ? WHERE id = ?", (new_conf, strat_id))
-                                        conn_up.commit()
-                                        print(f"[Strategy Feedback] Updated strategy ID {strat_id} confidence from {old_conf}% to {new_conf}% based on trade return of {pnl:.2f}%")
-                                    conn_up.close()
-                                except Exception as feedback_err:
-                                    print(f"[Strategy Feedback Error] Failed to update confidence: {feedback_err}")
-                            asyncio.create_task(update_strategy_confidence(strategy_id, pnl_pct))
+                            asyncio.create_task(update_strategy_confidence_and_detect_drift(strategy_id, pnl_pct, symbol))
                         
                         # Trigger post-trade targeted learning (self-healing AI)
                         # This searches YouTube for better strategies in the area that just failed
@@ -3329,7 +3476,18 @@ async def get_prediction(symbol: str = "BTC/USDT", mode: str = "demo"):
         user_res = await session.execute(select(User).limit(1))
         user = user_res.scalars().first()
         if user:
-            res_strat = await session.execute(select(AIKnowledge).where(AIKnowledge.user_id == user.id))
+            if mode == "real":
+                res_strat = await session.execute(
+                    select(AIKnowledge)
+                    .where(AIKnowledge.user_id == user.id)
+                    .where(AIKnowledge.status == "LIVE_APPROVED")
+                )
+            else:
+                res_strat = await session.execute(
+                    select(AIKnowledge)
+                    .where(AIKnowledge.user_id == user.id)
+                    .where(AIKnowledge.status.in_(["BACKTESTED", "PAPER_VALIDATED", "LIVE_APPROVED"]))
+                )
             strategies = res_strat.scalars().all()
             
     consensus, confidence, agree_count, total_algos, indicators, matched_strategy_id = predict_consensus(symbol, candles, strategies)

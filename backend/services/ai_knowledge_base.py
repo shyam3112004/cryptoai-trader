@@ -13,6 +13,15 @@ async def add_ai_knowledge(
     rules: str,
     confidence: float
 ) -> AIKnowledge:
+    import json
+    
+    creation_event = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "from_status": None,
+        "to_status": "LEARNED",
+        "reason": "Strategy extracted from YouTube video by autonomous learner."
+    }
+    
     knowledge = AIKnowledge(
         user_id=user_id,
         video_id=video_id,
@@ -20,7 +29,9 @@ async def add_ai_knowledge(
         channel=channel,
         strategy_type=strategy_type,
         rules=rules,
-        confidence=confidence
+        confidence=confidence,
+        status="LEARNED",
+        status_history=json.dumps([creation_event])
     )
     db.add(knowledge)
     await db.flush()

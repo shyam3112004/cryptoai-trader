@@ -29,7 +29,7 @@ class Settings:
     # AI Intelligence configurations
     YOUTUBE_API_KEY: str | None = os.getenv("YOUTUBE_API_KEY")
     CLAUDE_API_KEY: str | None = os.getenv("CLAUDE_API_KEY")
-    CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "google/gemini-2.5-flash:free")
+    CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "openrouter/free")
     CLAUDE_DAILY_BUDGET_USD: float = float(os.getenv("CLAUDE_DAILY_BUDGET_USD", "5.0"))
     AI_CONSULTATION_MODE: str = os.getenv("AI_CONSULTATION_MODE", "anomaly") # anomaly, every_trade, manual
 

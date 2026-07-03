@@ -76,6 +76,7 @@ class TradeHistory(Base):
     highest_price = Column(Float, nullable=True)
     strategy_id = Column(Integer, nullable=True)
     quantity = Column(Float, default=1.0)
+    rules_used = Column(String, nullable=True)
 
     # Relationship back to User
     user = relationship("User", back_populates="trades")
@@ -106,6 +107,12 @@ class AIKnowledge(Base):
     strategy_type = Column(String, nullable=False) # scalping, momentum, etc.
     rules = Column(String, nullable=False) # JSON string of rules
     confidence = Column(Float, default=70.0)
+    status = Column(String, default="LEARNED")
+    status_history = Column(String, nullable=True)
+    backtest_win_rate = Column(Float, nullable=True)
+    backtest_sortino = Column(Float, nullable=True)
+    backtest_drawdown = Column(Float, nullable=True)
+    regimes_data = Column(String, nullable=True)
 
 class AILearningSession(Base):
     __tablename__ = "ai_learning_sessions"

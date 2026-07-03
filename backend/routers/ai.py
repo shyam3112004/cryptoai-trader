@@ -1,11 +1,13 @@
 import json
+import math
+import random
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from pydantic import BaseModel
 
 from database import get_db_session
-from models import User, UserSetting, AIKnowledge, AIConsultation
+from models import User, UserSetting, AIKnowledge, AIConsultation, TradeHistory
 from routers.signals import get_demo_candles, predict_consensus
 from routers.auth import get_current_user
 from services.ai_intelligence_service import ai_intelligence_service
@@ -371,7 +373,13 @@ async def get_knowledge(
             "strategy_type": k.strategy_type,
             "rules": json.loads(k.rules),
             "date": k.date.isoformat(),
-            "confidence": k.confidence
+            "confidence": k.confidence,
+            "status": getattr(k, 'status', 'LEARNED') or 'LEARNED',
+            "status_history": json.loads(getattr(k, 'status_history', '[]') or '[]'),
+            "backtest_win_rate": getattr(k, 'backtest_win_rate', None),
+            "backtest_sortino": getattr(k, 'backtest_sortino', None),
+            "backtest_drawdown": getattr(k, 'backtest_drawdown', None),
+            "regimes_data": json.loads(getattr(k, 'regimes_data', '{}') or '{}')
         }
         for k in knowledge
     ]
@@ -456,6 +464,166 @@ class AIBacktestRequest(BaseModel):
     symbol: str = "BTC/USDT"
     mode: str = "demo"
 
+class PromoteStrategyRequest(BaseModel):
+    strategy_id: int
+    target_status: str # "PAPER_VALIDATED" or "LIVE_APPROVED"
+
+# Helper to segment candles into regimes
+def get_regime_slices(candles, window_size=150):
+    n = len(candles)
+    if n < window_size:
+        return candles, candles, candles # fallback
+        
+    trending_start = 0
+    max_trend = -1.0
+    
+    ranging_start = 0
+    min_range_score = 999999.0
+    
+    high_vol_start = 0
+    max_vol = -1.0
+    
+    for i in range(0, n - window_size + 1):
+        slice_c = candles[i : i + window_size]
+        
+        # Trend calculation
+        c_start = slice_c[0]["close"]
+        c_end = slice_c[-1]["close"]
+        trend = abs(c_end - c_start) / c_start if c_start > 0 else 0.0
+        
+        # Volatility calculation
+        closes = [c["close"] for c in slice_c]
+        returns = []
+        for j in range(1, len(closes)):
+            if closes[j-1] > 0:
+                returns.append(math.log(closes[j] / closes[j-1]))
+        mean_ret = sum(returns) / len(returns) if returns else 0.0
+        vol = math.sqrt(sum((r - mean_ret)**2 for r in returns) / len(returns)) if returns else 0.0
+        
+        # 1. Trending: Maximize absolute trend
+        if trend > max_trend:
+            max_trend = trend
+            trending_start = i
+            
+        # 2. High Volatility: Maximize standard deviation of returns
+        if vol > max_vol:
+            max_vol = vol
+            high_vol_start = i
+            
+        # 3. Ranging: Minimize both trend and volatility
+        range_score = trend + vol
+        if range_score < min_range_score:
+            min_range_score = range_score
+            ranging_start = i
+            
+    trending_slice = candles[trending_start : trending_start + window_size]
+    ranging_slice = candles[ranging_start : ranging_start + window_size]
+    high_vol_slice = candles[high_vol_start : high_vol_start + window_size]
+    
+    return trending_slice, ranging_slice, high_vol_slice
+
+# Helper to run walk-forward simulation
+def run_simulation(slice_candles, rules_list, sl_pct, tp_pct, leverage):
+    from services.strategy_matcher import evaluate_strategy
+    from routers.signals import compute_all_indicators, calculate_atr
+    
+    trades = []
+    active_trade = None
+    
+    # We need at least 30 candles to compute indicators
+    for i in range(30, len(slice_candles) - 1):
+        hist_candles = slice_candles[:i+1]
+        
+        if active_trade:
+            entry_price = active_trade["entry_price"]
+            curr_close = slice_candles[i]["close"]
+            gross_pnl_pct = (curr_close - entry_price) / entry_price
+            
+            target_hit = curr_close >= (entry_price * (1.0 + tp_pct))
+            stop_hit = curr_close <= (entry_price * (1.0 - sl_pct))
+            
+            if target_hit or stop_hit:
+                # Fee & slippage model (0.1% execution fee, 0.2% round-trip)
+                net_return_pct = gross_pnl_pct - 0.002
+                leveraged_return = net_return_pct * leverage * 100.0
+                
+                active_trade["exit_price"] = curr_close
+                active_trade["exit_time"] = i
+                active_trade["return_pct"] = leveraged_return
+                active_trade["status"] = "WIN" if leveraged_return >= 0.0 else "LOSS"
+                trades.append(active_trade)
+                active_trade = None
+            continue
+            
+        # Compute indicators
+        ema9_list, ema21_list, rsi_list, macd_hist_list, vwap_list, bb_bands_list, avg_vol = compute_all_indicators(hist_candles)
+        atr = calculate_atr(hist_candles)
+        
+        indicators = {
+            "RSI": rsi_list[-1],
+            "EMA_9": ema9_list[-1],
+            "EMA_21": ema21_list[-1],
+            "VWAP": vwap_list[-1],
+            "ATR": f"{round((atr / slice_candles[i]['close']) * 100.0, 2)}%" if slice_candles[i]["close"] > 0 else "2.1%",
+            "MACD_hist": round(macd_hist_list[-1], 4),
+            "BB_upper": round(bb_bands_list[-1][0], 2),
+            "BB_middle": round(bb_bands_list[-1][1], 2),
+            "BB_lower": round(bb_bands_list[-1][2], 2),
+            "close": slice_candles[i]["close"]
+        }
+        
+        decision = evaluate_strategy(rules_list, indicators)
+        if decision == "BUY":
+            active_trade = {
+                "entry_price": slice_candles[i]["close"],
+                "entry_time": i,
+                "status": "OPEN"
+            }
+            
+    # Close any open trade at the end
+    if active_trade:
+        curr_close = slice_candles[-1]["close"]
+        gross_pnl_pct = (curr_close - active_trade["entry_price"]) / active_trade["entry_price"]
+        net_return_pct = gross_pnl_pct - 0.002
+        leveraged_return = net_return_pct * leverage * 100.0
+        
+        active_trade["exit_price"] = curr_close
+        active_trade["exit_time"] = len(slice_candles) - 1
+        active_trade["return_pct"] = leveraged_return
+        active_trade["status"] = "WIN" if leveraged_return >= 0.0 else "LOSS"
+        trades.append(active_trade)
+        
+    total_trades = len(trades)
+    winning_trades = sum(1 for t in trades if t["status"] == "WIN")
+    win_rate = (winning_trades / total_trades * 100.0) if total_trades > 0 else 0.0
+    net_pnl = sum(t["return_pct"] for t in trades)
+    
+    # Max Drawdown
+    equity = 100.0
+    peak = 100.0
+    max_dd = 0.0
+    for t in trades:
+        equity = equity * (1.0 + t["return_pct"] / 100.0)
+        peak = max(peak, equity)
+        dd = (peak - equity) / peak * 100.0
+        max_dd = max(max_dd, dd)
+        
+    # Sortino Ratio
+    returns_list = [t["return_pct"] for t in trades]
+    mean_ret = sum(returns_list) / len(returns_list) if returns_list else 0.0
+    neg_returns = [r for r in returns_list if r < 0]
+    downside_deviation = math.sqrt(sum(r**2 for r in neg_returns) / len(returns_list)) if returns_list and neg_returns else 0.0001
+    sortino = mean_ret / downside_deviation if downside_deviation > 0.0001 else 0.0
+    
+    return {
+        "trades": trades,
+        "total_trades": total_trades,
+        "win_rate": win_rate,
+        "net_pnl_pct": net_pnl,
+        "max_drawdown": max_dd,
+        "sortino": sortino
+    }
+
 @router.post("/backtest")
 async def backtest_strategy(
     req: AIBacktestRequest,
@@ -463,8 +631,9 @@ async def backtest_strategy(
     db: AsyncSession = Depends(get_db_session)
 ):
     from models import AIKnowledge
-    from services.strategy_matcher import evaluate_strategy, parse_sl_tp_ratios
-    from routers.signals import get_demo_candles, get_chart_data, compute_all_indicators, calculate_atr
+    from services.strategy_matcher import parse_sl_tp_ratios
+    from routers.signals import get_demo_candles, get_chart_data
+    from datetime import datetime
     
     # 1. Fetch strategy rules
     strat = await db.get(AIKnowledge, req.strategy_id)
@@ -476,99 +645,135 @@ async def backtest_strategy(
     except Exception:
         return {"success": False, "error": "Strategy has malformed or empty rules."}
         
-    # 2. Get candle data (at least 100 candles for backtesting)
+    # 2. Get candle data (request 1000 candles for statistically robust backtesting)
     if req.mode == "demo":
-        candles = get_demo_candles(req.symbol)
+        candles = get_demo_candles(req.symbol, num_candles=1000)
     else:
-        res = await get_chart_data(req.symbol, timeframe="15m")
+        res = await get_chart_data(req.symbol, timeframe="15m", limit=1000)
         candles = res.get("candles", [])
         
-    if len(candles) < 50:
-        return {"success": False, "error": "Insufficient candle data for backtesting (requires >= 50 candles)."}
+    if len(candles) < 200:
+        return {
+            "success": False, 
+            "error": f"Insufficient candle data for backtesting (got {len(candles)}, requires >= 200 candles to slice regimes)."
+        }
         
+    # Get user settings to apply custom leverage
+    stmt_set = select(UserSetting).where(UserSetting.user_id == current_user.id)
+    res_set = await db.execute(stmt_set)
+    user_setting = res_set.scalar_one_or_none()
+    leverage = user_setting.leverage if user_setting else 10
+    
     # Extract custom SL/TP ratios
     custom_sl, custom_tp = parse_sl_tp_ratios(rules_list)
     sl_pct = custom_sl if custom_sl is not None else 0.02
     tp_pct = custom_tp if custom_tp is not None else 0.03
     
-    trades = []
-    active_trade = None
+    # 3. Slice candles into regimes (Trending, Ranging, High-Volatility)
+    trending_slice, ranging_slice, high_vol_slice = get_regime_slices(candles, window_size=150)
     
-    # 3. Simulate historical walk-forward backtest
-    # We need at least 30 candles to compute indicators
-    for i in range(30, len(candles) - 1):
-        hist_candles = candles[:i+1]
-        
-        # Check active trade exit
-        if active_trade:
-            entry_price = active_trade["entry_price"]
-            curr_close = candles[i]["close"]
-            pnl_pct = (curr_close - entry_price) / entry_price
-            
-            target_hit = curr_close >= (entry_price * (1.0 + tp_pct))
-            stop_hit = curr_close <= (entry_price * (1.0 - sl_pct))
-            
-            if target_hit or stop_hit:
-                active_trade["exit_price"] = curr_close
-                active_trade["exit_time"] = i
-                active_trade["return_pct"] = pnl_pct * 100.0
-                active_trade["status"] = "WIN" if pnl_pct >= 0 else "LOSS"
-                trades.append(active_trade)
-                active_trade = None
-            continue
-            
-        # Compute indicators for current step
-        ema9_list, ema21_list, rsi_list, macd_hist_list, vwap_list, bb_bands_list, avg_vol = compute_all_indicators(hist_candles)
-        atr = calculate_atr(hist_candles)
-        
-        indicators = {
-            "RSI": rsi_list[-1],
-            "EMA_9": ema9_list[-1],
-            "EMA_21": ema21_list[-1],
-            "VWAP": vwap_list[-1],
-            "ATR": f"{round((atr / candles[i]['close']) * 100.0, 2)}%" if candles[i]["close"] > 0 else "2.1%",
-            "close": candles[i]["close"]
-        }
-        
-        # Evaluate rules
-        decision = evaluate_strategy(rules_list, indicators)
-        if decision == "BUY":
-            active_trade = {
-                "entry_price": candles[i]["close"],
-                "entry_time": i,
-                "status": "OPEN"
-            }
-            
-    # Close any open trade at the end of the data set
-    if active_trade:
-        curr_close = candles[-1]["close"]
-        pnl_pct = (curr_close - active_trade["entry_price"]) / active_trade["entry_price"]
-        active_trade["exit_price"] = curr_close
-        active_trade["exit_time"] = len(candles) - 1
-        active_trade["return_pct"] = pnl_pct * 100.0
-        active_trade["status"] = "WIN" if pnl_pct >= 0 else "LOSS"
-        trades.append(active_trade)
-        
-    # Calculate stats
-    total_trades = len(trades)
-    winning_trades = sum(1 for t in trades if t["status"] == "WIN")
-    win_rate = (winning_trades / total_trades * 100.0) if total_trades > 0 else 0.0
-    net_pnl = sum(t["return_pct"] for t in trades)
+    # 4. Run walk-forward simulations
+    full_res = run_simulation(candles, rules_list, sl_pct, tp_pct, leverage)
+    trend_res = run_simulation(trending_slice, rules_list, sl_pct, tp_pct, leverage)
+    range_res = run_simulation(ranging_slice, rules_list, sl_pct, tp_pct, leverage)
+    vol_res = run_simulation(high_vol_slice, rules_list, sl_pct, tp_pct, leverage)
     
-    # 4. Update strategy confidence in database
-    if total_trades > 0:
-        # Scale backtest winrate into a safe confidence interval [60, 95]
+    total_trades = full_res["total_trades"]
+    win_rate = full_res["win_rate"]
+    net_pnl = full_res["net_pnl_pct"]
+    max_dd = full_res["max_drawdown"]
+    sortino = full_res["sortino"]
+    
+    # 5. Evaluate promotion/gating criteria (Phase 1 & Phase 2)
+    promotion_issues = []
+    
+    # Validation 1: Sample size
+    if total_trades < 30:
+        promotion_issues.append(f"Insufficient trades: got {total_trades} completed trades, need >= 30.")
+        
+    # Validation 2: Profitability & Win Rate
+    if net_pnl <= 0:
+        promotion_issues.append(f"Strategy is net-unprofitable (Net Return: {net_pnl:.2f}%).")
+    if win_rate < 50.0:
+        promotion_issues.append(f"Strategy win rate too low ({win_rate:.2f}%, need >= 50.0%).")
+        
+    # Validation 3: Cross-source agreement
+    stmt_agree = select(func.count(AIKnowledge.video_id.distinct())).where(
+        AIKnowledge.strategy_type == strat.strategy_type,
+        AIKnowledge.user_id == current_user.id
+    )
+    distinct_sources = await db.scalar(stmt_agree) or 0
+    if distinct_sources < 2:
+        promotion_issues.append(f"No cross-source agreement: found only {distinct_sources} video source for type '{strat.strategy_type}', need >= 2.")
+        
+    # Validation 4: Regime check
+    if trend_res["net_pnl_pct"] <= 0 or range_res["net_pnl_pct"] <= 0 or vol_res["net_pnl_pct"] <= 0:
+        promotion_issues.append(
+            f"Regime failure: Net returns must be positive in all regimes. "
+            f"Trending: {trend_res['net_pnl_pct']:.2f}%, Ranging: {range_res['net_pnl_pct']:.2f}%, Volatile: {vol_res['net_pnl_pct']:.2f}%."
+        )
+
+    promoted = len(promotion_issues) == 0
+    old_status = getattr(strat, 'status', 'LEARNED') or 'LEARNED'
+    
+    if promoted:
+        # Commit status transition
+        strat.status = "BACKTESTED"
+        history = json.loads(getattr(strat, 'status_history', '[]') or '[]')
+        history.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "from_status": old_status,
+            "to_status": "BACKTESTED",
+            "reason": f"Passed backtest on {req.symbol} (trades: {total_trades}, win rate: {win_rate:.2f}%, sortino: {sortino:.2f}, drawdown: {max_dd:.2f}%)."
+        })
+        strat.status_history = json.dumps(history)
+        strat.backtest_win_rate = win_rate
+        strat.backtest_sortino = sortino
+        strat.backtest_drawdown = max_dd
+        strat.regimes_data = json.dumps({
+            "trending": {"trades": trend_res["total_trades"], "win_rate": trend_res["win_rate"], "pnl": trend_res["net_pnl_pct"], "sortino": trend_res["sortino"], "drawdown": trend_res["max_drawdown"]},
+            "ranging": {"trades": range_res["total_trades"], "win_rate": range_res["win_rate"], "pnl": range_res["net_pnl_pct"], "sortino": range_res["sortino"], "drawdown": range_res["max_drawdown"]},
+            "high_volatility": {"trades": vol_res["total_trades"], "win_rate": vol_res["win_rate"], "pnl": vol_res["net_pnl_pct"], "sortino": vol_res["sortino"], "drawdown": vol_res["max_drawdown"]}
+        })
         strat.confidence = round(max(60.0, min(95.0, win_rate)), 1)
+        await db.commit()
+    else:
+        # Record failed validation in history log but do not change state
+        history = json.loads(getattr(strat, 'status_history', '[]') or '[]')
+        history.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "from_status": old_status,
+            "to_status": old_status,
+            "reason": f"Failed backtest validation. Issues: {', '.join(promotion_issues)}"
+        })
+        strat.status_history = json.dumps(history)
+        strat.backtest_win_rate = win_rate
+        strat.backtest_sortino = sortino
+        strat.backtest_drawdown = max_dd
+        strat.regimes_data = json.dumps({
+            "trending": {"trades": trend_res["total_trades"], "win_rate": trend_res["win_rate"], "pnl": trend_res["net_pnl_pct"], "sortino": trend_res["sortino"], "drawdown": trend_res["max_drawdown"]},
+            "ranging": {"trades": range_res["total_trades"], "win_rate": range_res["win_rate"], "pnl": range_res["net_pnl_pct"], "sortino": range_res["sortino"], "drawdown": range_res["max_drawdown"]},
+            "high_volatility": {"trades": vol_res["total_trades"], "win_rate": vol_res["win_rate"], "pnl": vol_res["net_pnl_pct"], "sortino": vol_res["sortino"], "drawdown": vol_res["max_drawdown"]}
+        })
         await db.commit()
         
     return {
         "success": True,
+        "promoted": promoted,
+        "promotion_errors": promotion_issues,
         "strategy_title": strat.title,
         "total_trades": total_trades,
-        "winning_trades": winning_trades,
+        "winning_trades": sum(1 for t in full_res["trades"] if t["status"] == "WIN"),
         "win_rate": round(win_rate, 2),
         "net_pnl_pct": round(net_pnl, 2),
+        "sortino": round(sortino, 2),
+        "max_drawdown": round(max_dd, 2),
         "confidence": strat.confidence,
+        "regimes": {
+            "trending": trend_res,
+            "ranging": range_res,
+            "high_volatility": vol_res
+        },
         "trades": [
             {
                 "id": tIdx + 1,
@@ -577,6 +782,120 @@ async def backtest_strategy(
                 "return_pct": round(t["return_pct"], 2),
                 "status": t["status"]
             }
-            for tIdx, t in enumerate(trades)
+            for tIdx, t in enumerate(full_res["trades"])
         ]
+    }
+
+@router.post("/promote")
+async def promote_strategy(
+    req: PromoteStrategyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    from models import AIKnowledge, TradeHistory
+    from datetime import datetime
+    
+    # 1. Fetch strategy rules
+    strat = await db.get(AIKnowledge, req.strategy_id)
+    if not strat:
+        raise HTTPException(status_code=404, detail="Strategy not found.")
+        
+    current_status = getattr(strat, 'status', 'LEARNED') or 'LEARNED'
+    
+    # Validation gates
+    if req.target_status == "PAPER_VALIDATED":
+        if current_status != "BACKTESTED":
+            raise HTTPException(status_code=400, detail="Strategy must be BACKTESTED before promoting to PAPER_VALIDATED.")
+            
+        # Check Completed trades in TradeHistory (demo mode)
+        stmt_trades = select(TradeHistory).where(
+            TradeHistory.strategy_id == req.strategy_id,
+            TradeHistory.status != "OPEN"
+        )
+        res_trades = await db.execute(stmt_trades)
+        trades = res_trades.scalars().all()
+        
+        if len(trades) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed: Strategy has only completed {len(trades)} paper trades, need >= 10."
+            )
+            
+        # Calculate win rate
+        wins = 0
+        for t in trades:
+            # Parse positive returns, e.g. +2.45%
+            ret_str = t.return_pct.replace("%", "").strip()
+            try:
+                ret_val = float(ret_str)
+                if ret_val >= 0:
+                    wins += 1
+            except ValueError:
+                pass
+                
+        win_rate = (wins / len(trades)) * 100.0
+        if win_rate < 55.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed: Strategy paper win rate is {win_rate:.2f}%, need >= 55%."
+            )
+            
+    elif req.target_status == "LIVE_APPROVED":
+        if current_status != "PAPER_VALIDATED":
+            raise HTTPException(status_code=400, detail="Strategy must be PAPER_VALIDATED before promoting to LIVE_APPROVED.")
+            
+        # Check Completed trades in TradeHistory
+        stmt_trades = select(TradeHistory).where(
+            TradeHistory.strategy_id == req.strategy_id,
+            TradeHistory.status != "OPEN"
+        )
+        res_trades = await db.execute(stmt_trades)
+        trades = res_trades.scalars().all()
+        
+        if len(trades) < 15:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed: Strategy has only completed {len(trades)} paper trades, need >= 15."
+            )
+            
+        # Calculate win rate and drift vs backtest
+        wins = 0
+        for t in trades:
+            ret_str = t.return_pct.replace("%", "").strip()
+            try:
+                ret_val = float(ret_str)
+                if ret_val >= 0:
+                    wins += 1
+            except ValueError:
+                pass
+                
+        live_win_rate = (wins / len(trades)) * 100.0
+        backtest_win_rate = getattr(strat, 'backtest_win_rate', 0.0) or 0.0
+        
+        drift = abs(backtest_win_rate - live_win_rate)
+        if drift > 15.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed: Strategy has high performance drift ({drift:.2f} points, max 15 allowed). Backtest: {backtest_win_rate:.2f}%, Live: {live_win_rate:.2f}%."
+            )
+            
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid target status: '{req.target_status}'")
+        
+    # Promote status
+    strat.status = req.target_status
+    history = json.loads(getattr(strat, 'status_history', '[]') or '[]')
+    history.append({
+        "timestamp": datetime.utcnow().isoformat(),
+        "from_status": current_status,
+        "to_status": req.target_status,
+        "reason": f"Manually promoted after meeting all stage requirements."
+    })
+    strat.status_history = json.dumps(history)
+    await db.commit()
+    
+    return {
+        "success": True,
+        "new_status": req.target_status,
+        "strategy_title": strat.title
     }

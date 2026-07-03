@@ -44,7 +44,18 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE trade_history ADD COLUMN strategy_id INTEGER",
                 "ALTER TABLE trade_history ADD COLUMN highest_price FLOAT",
                 "ALTER TABLE user_settings ADD COLUMN trade_shares FLOAT DEFAULT 1.0",
-                "ALTER TABLE trade_history ADD COLUMN quantity FLOAT DEFAULT 1.0"
+                "ALTER TABLE trade_history ADD COLUMN quantity FLOAT DEFAULT 1.0",
+                "ALTER TABLE ai_knowledge ADD COLUMN status VARCHAR DEFAULT 'LEARNED'",
+                "ALTER TABLE ai_knowledge ADD COLUMN status_history TEXT",
+                "ALTER TABLE ai_knowledge ADD COLUMN backtest_win_rate FLOAT",
+                "ALTER TABLE ai_knowledge ADD COLUMN backtest_sortino FLOAT",
+                "ALTER TABLE ai_knowledge ADD COLUMN backtest_drawdown FLOAT",
+                "ALTER TABLE ai_knowledge ADD COLUMN regimes_data TEXT",
+                "ALTER TABLE user_settings ADD COLUMN leverage INTEGER DEFAULT 10",
+                "ALTER TABLE user_settings ADD COLUMN trade_direction VARCHAR DEFAULT 'BOTH'",
+                "ALTER TABLE user_settings ADD COLUMN ai_candle_interval VARCHAR DEFAULT '30s'",
+                "ALTER TABLE user_settings ADD COLUMN use_algorithms BOOLEAN DEFAULT 1",
+                "ALTER TABLE trade_history ADD COLUMN rules_used TEXT"
             ]
 
             for sql in migrations:

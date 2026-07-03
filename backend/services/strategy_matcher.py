@@ -1,10 +1,10 @@
 import re
 import json
 
-def parse_rule_condition(detail_text: str, indicators: dict) -> bool:
+def parse_rule_condition(detail_text: str, indicators: dict) -> bool | None:
     """
     Parses a single rule detail string to check if its technical condition is met.
-    Returns True if condition is met, False otherwise.
+    Returns True if condition is met, False if not met, and None if unrecognized/unparseable.
     """
     text = detail_text.lower()
     close_price = indicators.get("close", 0.0)
@@ -31,12 +31,15 @@ def parse_rule_condition(detail_text: str, indicators: dict) -> bool:
                 low = float(m_between.group(1))
                 high = float(m_between.group(2))
                 return low <= rsi_val <= high
+        return None
 
     # --- EMA / Price Crossover Conditions ---
     # Case: EMA 9 is above EMA 21 (or similar)
     if "ema" in text:
         ema9 = indicators.get("EMA_9")
         ema21 = indicators.get("EMA_21")
+        
+        # Cross check common values
         if ema9 is not None and ema21 is not None:
             if "9 ema is above 21 ema" in text or "ema 9 is above ema 21" in text or "9 ema above 21 ema" in text or "9 is above 21" in text or "20 ema must be above 50 ema" in text or "20 ema above 50 ema" in text:
                 return ema9 > ema21
@@ -45,18 +48,19 @@ def parse_rule_condition(detail_text: str, indicators: dict) -> bool:
                 
         # Case: Price relative to EMA
         if "price" in text or "close" in text:
-            # Price above EMA 9
+            # Price above EMA 9 or 21
             if "above" in text or ">" in text:
                 if "9 ema" in text or "ema 9" in text:
-                    return close_price > (ema9 or 0.0)
+                    return close_price > (ema9 or 0.0) if ema9 is not None else None
                 if "21 ema" in text or "ema 21" in text:
-                    return close_price > (ema21 or 0.0)
+                    return close_price > (ema21 or 0.0) if ema21 is not None else None
             # Price below EMA
             if "below" in text or "<" in text:
                 if "9 ema" in text or "ema 9" in text:
-                    return close_price < (ema9 or 0.0)
+                    return close_price < (ema9 or 0.0) if ema9 is not None else None
                 if "21 ema" in text or "ema 21" in text:
-                    return close_price < (ema21 or 0.0)
+                    return close_price < (ema21 or 0.0) if ema21 is not None else None
+        return None
 
     # --- VWAP Conditions ---
     if "vwap" in text:
@@ -66,9 +70,31 @@ def parse_rule_condition(detail_text: str, indicators: dict) -> bool:
                 return close_price > vwap
             if "below" in text or "<" in text:
                 return close_price < vwap
+        return None
 
-    # If the rule has no recognizable technical condition, default to True (don't block the strategy)
-    return True
+    # --- MACD Conditions ---
+    if "macd" in text:
+        macd_hist = indicators.get("MACD_hist")
+        if macd_hist is not None:
+            if "above 0" in text or "positive" in text or "> 0" in text or "above zero" in text or "crosses above" in text:
+                return macd_hist > 0
+            if "below 0" in text or "negative" in text or "< 0" in text or "below zero" in text or "crosses below" in text:
+                return macd_hist < 0
+        return None
+
+    # --- Bollinger Bands Conditions ---
+    if "bollinger" in text or "bb " in text or "band" in text:
+        bb_upper = indicators.get("BB_upper")
+        bb_lower = indicators.get("BB_lower")
+        if bb_upper is not None and bb_lower is not None:
+            if "touches upper" in text or "above upper" in text or "crosses upper" in text or "touches top" in text or "upper band" in text:
+                return close_price >= bb_upper
+            if "touches lower" in text or "below lower" in text or "crosses lower" in text or "touches bottom" in text or "lower band" in text:
+                return close_price <= bb_lower
+        return None
+
+    # If the rule has no recognizable technical condition, return None (unparseable)
+    return None
 
 def evaluate_strategy(rules_list: list, indicators: dict) -> str:
     """
@@ -93,7 +119,10 @@ def evaluate_strategy(rules_list: list, indicators: dict) -> str:
         is_sell = "sell" in rule_title or "exit" in rule_title or "short" in rule_title or "sell" in detail.lower() or "short" in detail.lower()
         
         condition_met = parse_rule_condition(detail, indicators)
-        
+        if condition_met is None:
+            # Skip unparseable rule, does not count toward BUY/SELL vote
+            continue
+            
         if is_buy:
             buy_conditions.append(condition_met)
         elif is_sell:

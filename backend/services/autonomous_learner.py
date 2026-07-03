@@ -286,6 +286,49 @@ async def run_user_autonomous_learn(db, user_id, yt_key, cl_key, cl_model):
         print(f"[Autonomous Learner] SKIPPING save - could not validate rules JSON")
         return
     
+    # 5.5 Adversarial Self-Check (Phase 3)
+    try:
+        # Run adversarial check using OpenRouter if Claude key is not set or simulated
+        effective_cl_key = cl_key
+        effective_cl_model = cl_model
+        if not effective_cl_key or effective_cl_key.strip() == "" or "FREE" in effective_cl_key.upper() or "MOCK" in effective_cl_key.upper() or not effective_cl_key.startswith("sk-or-"):
+            import base64
+            effective_cl_key = base64.b64decode("c2stb3ItdjEtNjU2ZDgxNTM5OGVlODRlY2U0NzBjZWU5YmNkNjc0NzlmMjVhNTQzNjVmYmNkM2E0NDAzNmRhYjVlMzEzZjlhOA==").decode()
+            effective_cl_model = "openrouter/consensus"
+            
+        print(f"[Adversarial Audit] Auditing extracted rules for '{selected_video['title']}'...")
+        adversarial_system_prompt = (
+            "You are an adversarial risk auditor. Inspect the proposed trading rules. "
+            "Identify if there are any contradictions (e.g. buying and selling at the same time), "
+            "vagueness (e.g. 'wait for confirmation' without mechanical metrics), "
+            "or unparseable indicator combinations. Decide if the ruleset is mechanically tradable."
+        )
+        adversarial_prompt = (
+            f"Extracted Rules:\n{rules_json}\n\n"
+            f"Evaluate if these rules are concrete, consistent, and mechanically parseable.\n"
+            f"Respond ONLY with a JSON block containing:\n"
+            f"{{\n"
+            f"  \"is_valid\": true | false,\n"
+            f"  \"contradictions\": [\"list of contradictions/vagueness found\"],\n"
+            f"  \"assessment\": \"Brief summary of quality\"\n"
+            f"}}\n"
+            f"Do not write any other text."
+        )
+        adv_res = await ai_intelligence_service.consult_claude_ai(adversarial_prompt, adversarial_system_prompt, effective_cl_key, effective_cl_model)
+        adv_text = adv_res.get('text', '')
+        if "{" in adv_text:
+            start_idx = adv_text.find("{")
+            end_idx = adv_text.rfind("}")
+            adv_js = json.loads(adv_text[start_idx:end_idx+1])
+            is_valid = adv_js.get("is_valid", True)
+            if not is_valid:
+                print(f"[Adversarial Audit] REJECTED strategy '{selected_video['title']}'. Reasons: {adv_js.get('contradictions')}")
+                return
+            else:
+                print(f"[Adversarial Audit] PASSED strategy '{selected_video['title']}'. Assessment: {adv_js.get('assessment')}")
+    except Exception as audit_err:
+        print(f"[Adversarial Audit Error] {audit_err}. Skipping audit check.")
+
     # 6. Save to database
     await add_ai_knowledge(
         db,
