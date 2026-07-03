@@ -1385,6 +1385,7 @@ async def query_user_info() -> dict:
                 trade_direction = setting.trade_direction if setting else "BOTH"
                 ai_candle_interval = setting.ai_candle_interval if setting else "30s"
                 ai_consultation_mode = setting.ai_consultation_mode if setting else "anomaly"
+                use_algorithms = setting.use_algorithms if (setting and setting.use_algorithms is not None) else True
                 
                 return {
                     "phone": phone,
@@ -1410,7 +1411,8 @@ async def query_user_info() -> dict:
                     "leverage": leverage,
                     "trade_direction": trade_direction,
                     "ai_candle_interval": ai_candle_interval,
-                    "ai_consultation_mode": ai_consultation_mode
+                    "ai_consultation_mode": ai_consultation_mode,
+                    "use_algorithms": bool(use_algorithms)
                 }
     except Exception as e:
         print(f"Error querying user info: {e}")
@@ -1433,7 +1435,10 @@ async def query_user_info() -> dict:
         "enable_trailing_stop": False,
         "auto_start_on_login": False,
         "trade_shares": 1.0,
-        "leverage": 10
+        "leverage": 10,
+        "use_algorithms": True,
+        "ai_candle_interval": "30s",
+        "ai_consultation_mode": "anomaly"
     }
 
 async def execute_binance_real_order(symbol: str, side: str, quantity: float, api_key: str, api_secret: str):
@@ -2254,7 +2259,7 @@ async def simulate_live_ticks():
                     price_cache[norm_sym] = price_cache[symbol]
                 
                 # Periodically sync with actual exchange price to prevent random walk drift
-                if sync_tick % 5 == 0:
+                if sync_tick % 5 == 0 and (has_active_trade or symbol in manager.active_connections.values()):
                     try:
                         user_info_sync = await query_user_info()
                         mode_sync = user_info_sync.get("mode", "demo")

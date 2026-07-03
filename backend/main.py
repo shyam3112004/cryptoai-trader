@@ -1,3 +1,9 @@
+import sys
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 import asyncio
 import uvicorn
 from contextlib import asynccontextmanager

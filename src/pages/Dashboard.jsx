@@ -184,7 +184,7 @@ export default function Dashboard() {
     setAiCandleInterval(newTf)
     try {
       const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
-      const activeToken = token || localStorage.getItem('token')
+      const activeToken = token || useAuthStore.getState().token
       await fetch(`${apiBase}/api/v1/ai/settings`, {
         method: 'PUT',
         headers: {
@@ -225,6 +225,7 @@ export default function Dashboard() {
   const [isBacktesting, setIsBacktesting] = useState(false)
   const [showBacktestModal, setShowBacktestModal] = useState(false)
   const [consultationsLog, setConsultationsLog] = useState([])
+  const [selectedConsultation, setSelectedConsultation] = useState(null)
   const [aiActiveSection, setAiActiveSection] = useState('advisor') // advisor, youtube, knowledge, log
   const [showKeysConfig, setShowKeysConfig] = useState(false)
   const [saveKeysStatus, setSaveKeysStatus] = useState('')
@@ -508,14 +509,14 @@ export default function Dashboard() {
     if (!isSettingsLoadedRef.current) return
     const saveTradeSize = async () => {
       try {
-        const token = localStorage.getItem('token')
-        if (!token) return
+        const activeToken = token || useAuthStore.getState().token
+        if (!activeToken) return
         const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
         await fetch(`${apiBase}/api/v1/auth/settings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${activeToken}`
           },
           body: JSON.stringify({
             trade_investment_usd: tradeInvestmentUSD,
@@ -1159,7 +1160,7 @@ export default function Dashboard() {
       for (let idx = visibleData.length - 1; idx >= 0; idx--) {
         const fullIdx = Math.max(0, fullData.length - zoomLevel - panOffset) + idx
         const x = candleSpacing * idx + candleGap + candleBodyW / 2
-        const y = scaleY(bbLowerList[fullIdx] || candle.close)
+        const y = scaleY(bbLowerList[fullIdx] || visibleData[idx].close)
         ctx.lineTo(x, y)
       }
       ctx.closePath()
@@ -1893,11 +1894,13 @@ export default function Dashboard() {
         }
       }
 
-      ws.onerror = (err) => {
+      const triggerReconnect = () => {
         if (isCleaningUp) return
-        console.warn('Websocket error encountered, starting mock ticker fallback', err)
         startFallback()
-        setTimeout(() => {
+        if (reconnectTimeout) return
+        console.log('Scheduling websocket reconnection in 3 seconds...')
+        reconnectTimeout = setTimeout(() => {
+          reconnectTimeout = null
           if (!isCleaningUp) {
             console.log('Attempting to reconnect websocket...')
             connectWebSocket()
@@ -1905,16 +1908,14 @@ export default function Dashboard() {
         }, 3000)
       }
 
+      ws.onerror = (err) => {
+        console.warn('Websocket error encountered, starting mock ticker fallback', err)
+        triggerReconnect()
+      }
+
       ws.onclose = () => {
-        if (isCleaningUp) return
         console.warn('Websocket stream closed, initiating fallback engine')
-        startFallback()
-        setTimeout(() => {
-          if (!isCleaningUp) {
-            console.log('Attempting to reconnect websocket...')
-            connectWebSocket()
-          }
-        }, 3000)
+        triggerReconnect()
       }
     }
 
@@ -2566,7 +2567,7 @@ export default function Dashboard() {
     // Sync mode change to backend database settings
     const syncModeToBackend = async () => {
       try {
-        const activeToken = token || localStorage.getItem('token');
+        const activeToken = token || useAuthStore.getState().token;
         if (activeToken) {
           const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin;
           await fetch(`${apiBase}/api/v1/auth/settings`, {
@@ -2613,7 +2614,7 @@ export default function Dashboard() {
 
   const fetchAiSettings = async () => {
     try {
-      const activeToken = token || localStorage.getItem('token')
+      const activeToken = token || useAuthStore.getState().token
       const res = await fetch(`${getApiBase()}/api/v1/ai/settings?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
       })
@@ -2634,7 +2635,7 @@ export default function Dashboard() {
 
   const fetchAiStatus = async () => {
     try {
-      const activeToken = token || localStorage.getItem('token')
+      const activeToken = token || useAuthStore.getState().token
       const res = await fetch(`${getApiBase()}/api/v1/ai/status?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${activeToken}` }
       })
@@ -2650,7 +2651,7 @@ export default function Dashboard() {
   const saveAiSettings = async () => {
     setSaveKeysStatus('Saving...')
     try {
-      const activeToken = token || localStorage.getItem('token')
+      const activeToken = token || useAuthStore.getState().token
       const res = await fetch(`${getApiBase()}/api/v1/ai/settings`, {
         method: 'PUT',
         headers: {
@@ -2926,8 +2927,14 @@ export default function Dashboard() {
       localStorage.setItem('tradeHistory', JSON.stringify([]))
       try {
         const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
-        await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { method: 'POST' })
-        await fetch(`${apiBase}/api/v1/signals/clear-active-positions`, { method: 'POST' })
+        await fetch(`${apiBase}/api/v1/signals/clear-trade-history`, { 
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${useAuthStore.getState().token}` }
+        })
+        await fetch(`${apiBase}/api/v1/signals/clear-active-positions`, { 
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${useAuthStore.getState().token}` }
+        })
         setActivePositions({})
         pollAutoModeStatus()
       } catch (e) {
@@ -5790,7 +5797,11 @@ export default function Dashboard() {
                           </thead>
                           <tbody className="divide-y divide-[#1E2D4A]">
                             {consultationsLog.map((log) => (
-                              <tr key={log.id} className="hover:bg-[#131B2E]/40 transition-colors">
+                              <tr 
+                                key={log.id} 
+                                onClick={() => setSelectedConsultation(log)}
+                                className="hover:bg-[#131B2E]/60 transition-colors cursor-pointer"
+                              >
                                 <td className="p-3 font-mono-data text-[10px] text-slate-400">
                                   {new Date(log.date).toLocaleString()}
                                 </td>
@@ -6734,13 +6745,13 @@ export default function Dashboard() {
                 <button
                   onClick={async () => {
                     try {
-                      const token = localStorage.getItem('token')
+                      const activeToken = token || useAuthStore.getState().token
                       const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : window.location.origin
                       await fetch(`${apiBase}/api/v1/auth/settings`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',
-                          'Authorization': token ? `Bearer ${token}` : ''
+                          'Authorization': activeToken ? `Bearer ${activeToken}` : ''
                         },
                         body: JSON.stringify({
                           broker_gateway: brokerGateway,
@@ -6907,6 +6918,74 @@ export default function Dashboard() {
                   className="px-4 py-2 bg-cyan-400 text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-cyan-300 transition-all cursor-pointer shadow-md"
                 >
                   Close Engine
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedConsultation && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#030712]/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-[#0b1329] border border-[#1E2D4A] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-scale-up">
+              <div className="flex justify-between items-center px-6 py-4 border-b border-[#1E2D4A] bg-[#111A30]">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-400">psychology</span>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">AI Consultation Report</h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedConsultation(null)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+
+              <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4 text-left">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#131E35] border border-[#1E2D4A]/50 rounded-xl p-4 text-xs">
+                  <div>
+                    <span className="text-slate-500 block">Timestamp</span>
+                    <span className="font-bold text-white font-mono-data">{new Date(selectedConsultation.date).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Asset Pair</span>
+                    <span className="font-bold text-white font-mono-data">{selectedConsultation.symbol}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Type</span>
+                    <span className="font-bold text-cyan-400 uppercase tracking-wider">{selectedConsultation.issue_type}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Recommendation</span>
+                    <span className={`font-bold ${
+                      selectedConsultation.recommendation === 'BUY' ? 'text-green-400' : (selectedConsultation.recommendation === 'SELL' ? 'text-red-400' : 'text-amber-500')
+                    }`}>{selectedConsultation.recommendation}</span>
+                  </div>
+                </div>
+
+                {/* Prompt Summary */}
+                {selectedConsultation.prompt && (
+                  <div className="bg-[#090D1A] border border-[#1E2D4A]/30 rounded-xl p-4">
+                    <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Prompt Summary</h4>
+                    <p className="text-xs text-slate-300 font-mono-data leading-relaxed">{selectedConsultation.prompt}</p>
+                  </div>
+                )}
+
+                {/* Detailed Advisory Snippet */}
+                <div className="bg-[#090D1A] border border-[#1E2D4A]/30 rounded-xl p-4">
+                  <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Detailed Advisory & Diagnosis</h4>
+                  <div className="whitespace-pre-wrap font-sans text-xs text-slate-300 leading-relaxed space-y-2">
+                    {selectedConsultation.response}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-[#111A30] border-t border-[#1E2D4A] flex justify-end">
+                <button
+                  onClick={() => setSelectedConsultation(null)}
+                  className="px-4 py-2 bg-cyan-400 text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-cyan-300 transition-all cursor-pointer shadow-md"
+                >
+                  Close Report
                 </button>
               </div>
             </div>

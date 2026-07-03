@@ -103,6 +103,11 @@ export const useAuthStore = create()(
                 lockedUntil: Date.now() + lockDuration,
                 isLoading: false
               })
+            } else {
+              set({
+                loginAttempts: get().loginAttempts + 1,
+                isLoading: false
+              })
             }
             throw new Error(json.detail || 'Login failed')
           }

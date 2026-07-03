@@ -160,8 +160,8 @@ class AIIntelligenceService:
         if not effective_key or effective_key.strip() == "" or "FREE" in effective_key:
             return self._simulate_claude_response(prompt, system_prompt)
 
-        # Check if using OpenRouter (key starts with sk-or- or contains openrouter)
-        is_openrouter = "openrouter" in effective_model.lower() or effective_key.startswith("sk-or-") or "openrouter" in effective_key.lower()
+        # Check if using OpenRouter (key starts with sk-or-, model contains openrouter or :free)
+        is_openrouter = ("openrouter" in effective_model.lower() or ":free" in effective_model.lower() or effective_key.startswith("sk-or-") or "openrouter" in effective_key.lower()) and not effective_key.startswith("ABSK")
         
         if is_openrouter:
             import asyncio
@@ -199,6 +199,11 @@ class AIIntelligenceService:
 
                 tasks = [query_model(m) for m in models_to_query]
                 query_results = await asyncio.gather(*tasks)
+                
+                success_count = sum(1 for m_id, data in query_results if data and data.get("choices", [{}])[0].get("message", {}).get("content", "").strip())
+                if success_count == 0:
+                    print("[OpenRouter Consensus] All models failed to return content. Falling back to mock simulation.")
+                    return self._simulate_claude_response(prompt, system_prompt)
                 
                 parsed_models = {}
                 combined_text = "### 🧠 OpenRouter Consensus Live Advisory\n\n"
@@ -241,6 +246,7 @@ class AIIntelligenceService:
                     m_conf = 80
                     m_reason = ""
                     
+                    print(f"[OpenRouter Consensus Debug] Model {m_id} returned raw response:\n{raw_text}\n---")
                     try:
                         cleaned = raw_text.strip()
                         json_block = None
@@ -361,6 +367,11 @@ class AIIntelligenceService:
         if is_bedrock:
             region = "us-east-1"
             bedrock_model = effective_model
+            
+            # Map non-Bedrock models (like OpenRouter ones) to Bedrock defaults
+            bm_lower = bedrock_model.lower()
+            if "gemini" in bm_lower or "llama" in bm_lower or "mistral" in bm_lower or "consensus" in bm_lower or "openrouter" in bm_lower:
+                bedrock_model = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
             
             # Check for region override or cross-region prefix
             if "::" in effective_model:
@@ -857,14 +868,9 @@ class AIIntelligenceService:
                 confidence = 85
                 reasoning = "PREDICT: Bearish EMA structure and high RSI support a SHORT setup."
             else:
-                # Force trade every candle: choose direction based on RSI midpoint
-                if rsi >= 50:
-                    decision = "LONG"
-                    reasoning = f"PREDICT (Force Trade): Neutral structure, RSI ({rsi:.1f}) >= 50 suggests potential LONG bias."
-                else:
-                    decision = "SHORT"
-                    reasoning = f"PREDICT (Force Trade): Neutral structure, RSI ({rsi:.1f}) < 50 suggests potential SHORT bias."
-                confidence = 75
+                decision = "HOLD"
+                reasoning = f"PREDICT: Market is consolidating in a neutral range. RSI is {rsi:.1f} and EMAs are flat. Holding to protect capital."
+                confidence = 80
         elif direction == "LONG":
             if is_downtrend and rsi > 40:
                 decision = "REJECT"

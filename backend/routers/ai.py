@@ -389,6 +389,7 @@ async def get_consultations_log(
             "issue_type": c.issue_type,
             "recommendation": c.recommendation,
             "response": c.response_summary,
+            "prompt": c.prompt_summary,
             "date": c.date.isoformat(),
             "cost": c.estimated_cost
         }
